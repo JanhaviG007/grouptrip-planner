@@ -116,6 +116,14 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .member-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px; background: #fbfcfa; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
 .member-id { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .member-budget { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.member-form { display: grid; gap: 14px; padding: 16px; margin-bottom: 20px; background: var(--cream); border: 1px solid var(--line); border-radius: 7px; }
+.member-form label { display: grid; gap: 7px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.member-form input { width: 100%; padding: 11px 12px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; outline: none; }
+.member-form input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(63, 128, 103, .12); }
+.member-form-actions { display: flex; align-items: center; gap: 12px; }
+.member-form-actions .auth-submit { flex: 1; }
+.cancel-button { padding: 12px 15px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; font-weight: 600; }
+.member-success { margin-bottom: 18px; }
 
 @media (max-width: 700px) {
   .container { width: min(100% - 40px, 560px); }

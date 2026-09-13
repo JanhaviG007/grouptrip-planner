@@ -53,6 +53,13 @@ function App() {
   const [tripMembers, setTripMembers] = useState([])
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
+  const [isMemberSaving, setIsMemberSaving] = useState(false)
+  const [memberFormMessage, setMemberFormMessage] = useState({ type: '', text: '' })
+  const [memberFormValues, setMemberFormValues] = useState({
+    email: '',
+    budget: '',
+  })
   const [isTripFormOpen, setIsTripFormOpen] = useState(false)
   const [isTripSaving, setIsTripSaving] = useState(false)
   const [tripFormMessage, setTripFormMessage] = useState('')
@@ -238,6 +245,94 @@ function App() {
     setSelectedTrip(null)
     setTripMembers([])
     setMembersError('')
+    setIsAddMemberOpen(false)
+    setMemberFormMessage({ type: '', text: '' })
+  }
+
+  const openAddMemberForm = () => {
+    setMemberFormMessage({ type: '', text: '' })
+    setIsAddMemberOpen(true)
+  }
+
+  const closeAddMemberForm = () => {
+    if (!isMemberSaving) {
+      setIsAddMemberOpen(false)
+      setMemberFormMessage({ type: '', text: '' })
+    }
+  }
+
+  const handleMemberInputChange = (event) => {
+    const { name, value } = event.target
+    setMemberFormValues((currentValues) => ({ ...currentValues, [name]: value }))
+    setMemberFormMessage({ type: '', text: '' })
+  }
+
+  const clearMemberForm = () => {
+    setMemberFormValues({ email: '', budget: '' })
+  }
+
+  const handleAddMemberSubmit = async (event) => {
+    event.preventDefault()
+    setMemberFormMessage({ type: '', text: '' })
+
+    if (!memberFormValues.email || !memberFormValues.budget) {
+      setMemberFormMessage({ type: 'error', text: 'Please enter an email and budget.' })
+      return
+    }
+
+    if (Number(memberFormValues.budget) <= 0) {
+      setMemberFormMessage({ type: 'error', text: 'The budget must be greater than 0.' })
+      return
+    }
+
+    setIsMemberSaving(true)
+
+    const { data: user, error: lookupError } = await supabase.functions.invoke(
+      'lookup-user',
+      { body: { email: memberFormValues.email.trim() } },
+    )
+
+    const userId = user?.id || user?.user?.id
+
+    if (lookupError || !userId) {
+      setMemberFormMessage({
+        type: 'error',
+        text: 'No registered user was found with that email address.',
+      })
+      setIsMemberSaving(false)
+      return
+    }
+
+    const { error: insertError } = await supabase.from('trip_members').insert({
+      trip_id: selectedTrip.id,
+      user_id: userId,
+      budget: Number(memberFormValues.budget),
+    })
+
+    if (insertError) {
+      const message = insertError.code === '23505'
+        ? 'This user is already a member of this trip.'
+        : 'We could not add this member. Please try again.'
+      setMemberFormMessage({ type: 'error', text: message })
+      setIsMemberSaving(false)
+      return
+    }
+
+    const { data: refreshedMembers, error: refreshError } = await supabase
+      .from('trip_members')
+      .select('*')
+      .eq('trip_id', selectedTrip.id)
+
+    if (refreshError) {
+      setMembersError('The member was added, but we could not refresh the member list.')
+    } else {
+      setTripMembers(refreshedMembers || [])
+    }
+
+    clearMemberForm()
+    setIsAddMemberOpen(false)
+    setMemberFormMessage({ type: 'success', text: 'Member added successfully.' })
+    setIsMemberSaving(false)
   }
 
   const openTripForm = () => {
@@ -465,8 +560,32 @@ function App() {
 
             <div className="members-heading">
               <h3>Trip Members</h3>
-              <button className="secondary-button" type="button">Add Member</button>
+              <button className="secondary-button" type="button" onClick={openAddMemberForm}>Add Member</button>
             </div>
+            {isAddMemberOpen && (
+              <form className="member-form" onSubmit={handleAddMemberSubmit}>
+                <label>
+                  Member email
+                  <input name="email" type="email" value={memberFormValues.email} onChange={handleMemberInputChange} required />
+                </label>
+                <label>
+                  Budget
+                  <input name="budget" type="number" min="0.01" step="0.01" value={memberFormValues.budget} onChange={handleMemberInputChange} required />
+                </label>
+                {memberFormMessage.text && (
+                  <p className={`auth-message ${memberFormMessage.type}`} role="alert">{memberFormMessage.text}</p>
+                )}
+                <div className="member-form-actions">
+                  <button className="auth-submit" type="submit" disabled={isMemberSaving}>
+                    {isMemberSaving ? 'Adding member…' : 'Add member'}
+                  </button>
+                  <button className="cancel-button" type="button" onClick={closeAddMemberForm} disabled={isMemberSaving}>Cancel</button>
+                </div>
+              </form>
+            )}
+            {!isAddMemberOpen && memberFormMessage.type === 'success' && (
+              <p className="auth-message success member-success" role="status">{memberFormMessage.text}</p>
+            )}
             {isMembersLoading && <p className="trips-status">Loading members…</p>}
             {!isMembersLoading && membersError && <p className="trips-status trips-error">{membersError}</p>}
             {!isMembersLoading && !membersError && tripMembers.length === 0 && (
