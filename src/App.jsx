@@ -48,6 +48,57 @@ function getMemberLabel(userId, members) {
   return memberIndex >= 0 ? `Member ${memberIndex + 1}` : 'Unknown member'
 }
 
+function calculateSettlements(budgetSummaries) {
+  const creditors = budgetSummaries
+    .filter((member) => Math.round(member.netBalance * 100) > 0)
+    .map((member) => ({
+      label: member.label,
+      remainingPence: Math.round(member.netBalance * 100),
+    }))
+  const debtors = budgetSummaries
+    .filter((member) => Math.round(member.netBalance * 100) < 0)
+    .map((member) => ({
+      label: member.label,
+      remainingPence: Math.abs(Math.round(member.netBalance * 100)),
+    }))
+  const settlements = []
+  let debtorIndex = 0
+  let creditorIndex = 0
+
+  // Match each debtor with the current creditor until one balance is settled.
+  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
+    const debtor = debtors[debtorIndex]
+    const creditor = creditors[creditorIndex]
+    const transferPence = Math.min(debtor.remainingPence, creditor.remainingPence)
+
+    if (transferPence > 0) {
+      settlements.push({
+        from: debtor.label,
+        to: creditor.label,
+        amount: transferPence / 100,
+      })
+    }
+
+    debtor.remainingPence -= transferPence
+    creditor.remainingPence -= transferPence
+
+    if (debtor.remainingPence <= 1) {
+      debtorIndex += 1
+    }
+    if (creditor.remainingPence <= 1) {
+      creditorIndex += 1
+    }
+  }
+
+  const totalDebtorPence = debtors.reduce((total, debtor) => total + debtor.remainingPence, 0)
+  const totalCreditorPence = creditors.reduce((total, creditor) => total + creditor.remainingPence, 0)
+
+  return {
+    settlements,
+    hasSignificantDifference: Math.abs(totalDebtorPence - totalCreditorPence) > 1,
+  }
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [authMode, setAuthMode] = useState('login')
@@ -637,6 +688,7 @@ function App() {
   const totalTripSpending = expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0)
   const totalTripAllocated = expenseSplits.reduce((total, split) => total + Number(split.amount_owed || 0), 0)
   const totalTripRemaining = totalTripBudget - totalTripAllocated
+  const settlementResult = calculateSettlements(budgetSummaries)
 
   return (
     <div className="app">
@@ -838,6 +890,28 @@ function App() {
                     })}
                   </div>
                 </>
+              )}
+            </div>
+
+            <div className="settlement-section">
+              <div className="settlement-heading">
+                <h3>Settlement</h3>
+              </div>
+              {settlementResult.hasSignificantDifference ? (
+                <p className="settlement-warning" role="alert">
+                  Settlement totals do not balance. Please check the expense splits.
+                </p>
+              ) : settlementResult.settlements.length === 0 ? (
+                <p className="trips-status">Everyone is settled up.</p>
+              ) : (
+                <div className="settlement-list">
+                  {settlementResult.settlements.map((settlement, index) => (
+                    <div className="settlement-row" key={`${settlement.from}-${settlement.to}-${index}`}>
+                      <span>{settlement.from} <span aria-hidden="true">→</span> {settlement.to}</span>
+                      <strong>{formatCurrency(settlement.amount)}</strong>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
