@@ -145,6 +145,14 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .member-details { display: grid; gap: 5px; min-width: 0; }
 .member-id { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .member-budget { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.member-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.budget-edit-form { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.budget-edit-form input { width: 130px; padding: 7px 9px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 5px; outline: none; font: inherit; }
+.budget-edit-form input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(63, 128, 103, .12); }
+.budget-edit-actions { display: flex; gap: 7px; }
+.edit-budget-button, .save-budget-button { padding: 7px 10px; color: var(--green); background: transparent; border: 1px solid #a9c8bb; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
+.edit-budget-button:hover, .save-budget-button:hover { background: #edf6f1; }
+.edit-budget-button:disabled, .save-budget-button:disabled { opacity: .55; cursor: not-allowed; }
 .remove-member-button { padding: 7px 10px; color: #9b3d3d; background: transparent; border: 1px solid #dfb9b9; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
 .remove-member-button:hover { background: #fbeded; }
 .remove-member-button:disabled { opacity: .55; cursor: not-allowed; }
@@ -207,6 +215,7 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .date-fields { grid-template-columns: 1fr; gap: 16px; }
   .members-heading { align-items: flex-start; flex-direction: column; }
   .member-row { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .member-row-actions, .budget-edit-form { width: 100%; }
   .budget-total-row { grid-template-columns: repeat(2, 1fr); }
   .budget-values { display: grid; gap: 5px; }
   .expenses-heading { align-items: flex-start; flex-direction: column; }

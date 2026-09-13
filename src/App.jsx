@@ -121,6 +121,9 @@ function App() {
   const [membersError, setMembersError] = useState('')
   const [removingMemberId, setRemovingMemberId] = useState('')
   const [memberActionMessage, setMemberActionMessage] = useState({ type: '', text: '' })
+  const [editingMemberId, setEditingMemberId] = useState('')
+  const [editBudgetValue, setEditBudgetValue] = useState('')
+  const [savingBudgetMemberId, setSavingBudgetMemberId] = useState('')
   const [expenses, setExpenses] = useState([])
   const [expenseSplits, setExpenseSplits] = useState([])
   const [isExpensesLoading, setIsExpensesLoading] = useState(false)
@@ -573,6 +576,56 @@ function App() {
       setMemberActionMessage({ type: 'success', text: 'Member removed successfully.' })
     }
     setRemovingMemberId('')
+  }
+
+  const handleEditBudget = (member) => {
+    setEditingMemberId(member.user_id)
+    setEditBudgetValue(member.budget === null || member.budget === undefined ? '' : String(member.budget))
+    setMemberActionMessage({ type: '', text: '' })
+  }
+
+  const handleCancelEditBudget = () => {
+    if (!savingBudgetMemberId) {
+      setEditingMemberId('')
+      setEditBudgetValue('')
+    }
+  }
+
+  const handleSaveBudget = async (event, memberId) => {
+    event.preventDefault()
+    setMemberActionMessage({ type: '', text: '' })
+
+    const budget = Number(editBudgetValue)
+    if (!editBudgetValue || Number.isNaN(budget) || budget <= 0) {
+      setMemberActionMessage({ type: 'error', text: 'The budget must be a valid number greater than 0.' })
+      return
+    }
+
+    setSavingBudgetMemberId(memberId)
+
+    const { error } = await supabase
+      .from('trip_members')
+      .update({ budget })
+      .eq('trip_id', selectedTrip.id)
+      .eq('user_id', memberId)
+
+    if (error) {
+      setMemberActionMessage({ type: 'error', text: 'We could not update this member’s budget. Please try again.' })
+      setSavingBudgetMemberId('')
+      return
+    }
+
+    const refreshed = await refreshTripMembers()
+    setSavingBudgetMemberId('')
+
+    if (!refreshed) {
+      setMemberActionMessage({ type: 'error', text: 'The budget was updated, but we could not refresh the member list.' })
+      return
+    }
+
+    setEditingMemberId('')
+    setEditBudgetValue('')
+    setMemberActionMessage({ type: 'success', text: 'Budget updated successfully.' })
   }
 
   const openAddExpenseForm = () => {
@@ -1078,19 +1131,54 @@ function App() {
                   <div className="member-row" key={member.user_id}>
                     <div className="member-details">
                       <span className="member-id">{getMemberLabel(member.user_id, tripMembers, profiles)}</span>
-                      <span className="member-budget">
-                        {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
-                      </span>
+                      {editingMemberId === member.user_id ? (
+                        <form className="budget-edit-form" onSubmit={(event) => handleSaveBudget(event, member.user_id)}>
+                          <input
+                            aria-label={`Budget for ${getMemberLabel(member.user_id, tripMembers, profiles)}`}
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={editBudgetValue}
+                            onChange={(event) => setEditBudgetValue(event.target.value)}
+                            required
+                            disabled={savingBudgetMemberId === member.user_id}
+                          />
+                          <div className="budget-edit-actions">
+                            <button className="save-budget-button" type="submit" disabled={savingBudgetMemberId === member.user_id}>
+                              {savingBudgetMemberId === member.user_id ? 'Saving…' : 'Save'}
+                            </button>
+                            <button className="cancel-button" type="button" onClick={handleCancelEditBudget} disabled={savingBudgetMemberId === member.user_id}>
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <span className="member-budget">
+                          {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
+                        </span>
+                      )}
                     </div>
                     {session.user.id !== member.user_id && (
-                      <button
-                        className="remove-member-button"
-                        type="button"
-                        onClick={() => handleRemoveMember(member.user_id)}
-                        disabled={removingMemberId !== '' && removingMemberId !== member.user_id}
-                      >
-                        {removingMemberId === member.user_id ? 'Removing…' : 'Remove'}
-                      </button>
+                      <div className="member-row-actions">
+                        {editingMemberId !== member.user_id && (
+                          <button
+                            className="edit-budget-button"
+                            type="button"
+                            onClick={() => handleEditBudget(member)}
+                            disabled={removingMemberId !== '' || savingBudgetMemberId !== ''}
+                          >
+                            Edit Budget
+                          </button>
+                        )}
+                        <button
+                          className="remove-member-button"
+                          type="button"
+                          onClick={() => handleRemoveMember(member.user_id)}
+                          disabled={removingMemberId !== '' && removingMemberId !== member.user_id || savingBudgetMemberId !== ''}
+                        >
+                          {removingMemberId === member.user_id ? 'Removing…' : 'Remove'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
