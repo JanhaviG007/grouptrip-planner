@@ -152,6 +152,43 @@ function formatItineraryTime(timeValue) {
   return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`
 }
 
+function getTodayDateOnly() {
+  const today = new Date()
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function formatOverviewDate(dateValue) {
+  if (!isValidDateOnly(dateValue)) {
+    return 'Date unavailable'
+  }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${dateValue}T00:00:00Z`))
+}
+
+function formatTripDateRange(startDate, endDate) {
+  if (!isValidDateOnly(startDate) || !isValidDateOnly(endDate)) {
+    return 'Dates unavailable'
+  }
+
+  const start = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(`${startDate}T00:00:00Z`))
+  const end = formatOverviewDate(endDate)
+
+  return `${start} – ${end}`
+}
+
 function createEqualSplitRows(expenseId, amount, memberIds) {
   const amountInPence = Math.round(amount * 100)
   const baseSplitInPence = Math.floor(amountInPence / memberIds.length)
@@ -1488,6 +1525,25 @@ function App() {
 
     return [...groups, { date: dateKey, items: [item] }]
   }, [])
+  const tripDuration = getTripDuration(selectedTrip?.start_date, selectedTrip?.end_date)
+  const overviewCategories = spendingInsights.categoryTotals
+    .filter((categoryTotal) => categoryTotal.total > 0)
+    .sort((first, second) => second.total - first.total)
+    .slice(0, 3)
+  const sortedOverviewActivities = [...itineraryItems]
+    .filter((item) => isValidDateOnly(item.activity_date))
+    .sort((first, second) => {
+      const dateDifference = first.activity_date.localeCompare(second.activity_date)
+      if (dateDifference !== 0) {
+        return dateDifference
+      }
+      return (first.start_time || '99:99').localeCompare(second.start_time || '99:99')
+    })
+  const todayDateOnly = getTodayDateOnly()
+  const upcomingActivities = sortedOverviewActivities.filter((item) => item.activity_date >= todayDateOnly)
+  const overviewActivities = (upcomingActivities.length > 0
+    ? upcomingActivities.slice(0, 3)
+    : sortedOverviewActivities.slice(-3).reverse())
 
   return (
     <div className="app">
@@ -1676,7 +1732,136 @@ function App() {
             <h2 id="trip-details-title">{selectedTrip.name}</h2>
             <div className="trip-summary">
               <p className="trip-destination">{selectedTrip.destination}</p>
-              <p className="trip-dates">{selectedTrip.start_date} <span aria-hidden="true">→</span> {selectedTrip.end_date}</p>
+              <p className="trip-dates">{formatTripDateRange(selectedTrip.start_date, selectedTrip.end_date)}</p>
+            </div>
+
+            <div className="trip-overview">
+              <div className="trip-overview-header">
+                <div>
+                  <p className="eyebrow">Your trip at a glance</p>
+                  <h3>Trip Overview</h3>
+                  <p>{formatTripDateRange(selectedTrip.start_date, selectedTrip.end_date)} · {tripDuration ? `${tripDuration} days` : 'Duration unavailable'} · {tripMembers.length} {tripMembers.length === 1 ? 'traveller' : 'travellers'}</p>
+                </div>
+                <span className="trip-overview-icon" aria-hidden="true">✦</span>
+              </div>
+
+              <div className="trip-overview-stats">
+                <div className="trip-overview-stat">
+                  <span>Budget</span>
+                  <strong>{formatCurrency(totalTripBudget)}</strong>
+                  <small>Total trip budget</small>
+                </div>
+                <div className="trip-overview-stat">
+                  <span>Spent</span>
+                  <strong>{formatCurrency(spendingInsights.totalSpending)}</strong>
+                  <small>Total trip spending</small>
+                </div>
+                <div className="trip-overview-stat">
+                  <span>Activities</span>
+                  <strong>{itineraryItems.length}</strong>
+                  <small>Planned activities</small>
+                </div>
+                <div className="trip-overview-stat">
+                  <span>Travellers</span>
+                  <strong>{tripMembers.length}</strong>
+                  <small>Trip members</small>
+                </div>
+              </div>
+
+              <div className={`overview-health overview-health-${tripHealth.status}`}>
+                <div className="overview-health-heading">
+                  <div>
+                    <span className="overview-card-label">Trip Health</span>
+                    <strong>{tripHealth.label}</strong>
+                  </div>
+                  {tripHealth.status !== 'none' && <span>{Math.round(tripHealth.usagePercentage)}% spent</span>}
+                </div>
+                <p>
+                  {tripHealth.status === 'good'
+                    ? 'You’re comfortably within budget.'
+                    : tripHealth.status === 'watch'
+                      ? 'You’re getting close to your budget.'
+                      : tripHealth.status === 'over'
+                        ? 'You’ve exceeded your planned budget.'
+                        : 'Set member budgets to track your trip health.'}
+                </p>
+                {tripHealth.status !== 'none' && (
+                  <div className="overview-health-bar">
+                    <span style={{ width: `${Math.min(Math.max(tripHealth.usagePercentage, 0), 100)}%` }}></span>
+                  </div>
+                )}
+                <small>
+                  {tripHealth.status === 'over'
+                    ? `${formatCurrency(Math.abs(tripHealth.remaining))} over budget`
+                    : tripHealth.status === 'none'
+                      ? 'No budget set'
+                      : `${formatCurrency(Math.max(tripHealth.remaining, 0))} remaining`}
+                </small>
+              </div>
+
+              <div className="trip-overview-grid">
+                <div className="overview-preview-card">
+                  <div className="overview-preview-heading">
+                    <h4>Spending preview</h4>
+                    <button type="button" onClick={() => document.getElementById('spending-insights')?.scrollIntoView({ behavior: 'smooth' })}>View full insights</button>
+                  </div>
+                  {overviewCategories.length === 0 ? (
+                    <p className="overview-empty-text">No spending recorded yet.</p>
+                  ) : (
+                    <div className="overview-category-list">
+                      {overviewCategories.map((categoryTotal) => (
+                        <div className="overview-category-row" key={categoryTotal.category}>
+                          <span>{categoryTotal.category}</span>
+                          <strong>{formatCurrency(categoryTotal.total)}</strong>
+                          <small>{Math.round(categoryTotal.percentage)}%</small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="overview-preview-card">
+                  <div className="overview-preview-heading">
+                    <h4>Upcoming itinerary</h4>
+                  </div>
+                  {overviewActivities.length === 0 ? (
+                    <p className="overview-empty-text">No activities planned yet.</p>
+                  ) : (
+                    <div className="overview-activity-list">
+                      {overviewActivities.map((item) => (
+                        <div className="overview-activity-row" key={item.id}>
+                          <small>
+                            {formatOverviewDate(item.activity_date)}
+                            {formatItineraryTime(item.start_time) && ` · ${formatItineraryTime(item.start_time)}`}
+                          </small>
+                          <strong>{item.title}</strong>
+                          {item.location && <span>📍 {item.location}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="overview-preview-card">
+                  <div className="overview-preview-heading">
+                    <h4>Settlement</h4>
+                  </div>
+                  {settlementResult.hasSignificantDifference ? (
+                    <p className="overview-warning">Settlement totals need checking.</p>
+                  ) : settlementResult.settlements.length === 0 ? (
+                    <p className="overview-empty-text">Everyone is settled 🎉</p>
+                  ) : (
+                    <div className="overview-settlement-list">
+                      {settlementResult.settlements.slice(0, 3).map((settlement, index) => (
+                        <div className="overview-settlement-row" key={`${settlement.from}-${settlement.to}-${index}`}>
+                          <span>{settlement.from} <b aria-hidden="true">→</b> {settlement.to}</span>
+                          <strong>{formatCurrency(settlement.amount)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className={`trip-health trip-health-${tripHealth.status}`}>
@@ -1878,7 +2063,7 @@ function App() {
               )}
             </div>
 
-            <div className="spending-insights">
+            <div className="spending-insights" id="spending-insights">
               <div className="spending-insights-heading">
                 <div>
                   <h3>Spending Insights</h3>
