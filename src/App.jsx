@@ -152,6 +152,19 @@ function formatItineraryTime(timeValue) {
   return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`
 }
 
+function createEqualSplitRows(expenseId, amount, memberIds) {
+  const amountInPence = Math.round(amount * 100)
+  const baseSplitInPence = Math.floor(amountInPence / memberIds.length)
+
+  return memberIds.map((userId, index) => ({
+    expense_id: expenseId,
+    user_id: userId,
+    amount_owed: (index === memberIds.length - 1
+      ? amountInPence - (baseSplitInPence * (memberIds.length - 1))
+      : baseSplitInPence) / 100,
+  }))
+}
+
 function getAuthErrorMessage(error) {
   const message = error?.message?.toLowerCase() || ''
 
@@ -307,6 +320,8 @@ function App() {
   const [expensesError, setExpensesError] = useState('')
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false)
   const [isExpenseSaving, setIsExpenseSaving] = useState(false)
+  const [deletingExpenseId, setDeletingExpenseId] = useState('')
+  const [editingExpenseId, setEditingExpenseId] = useState('')
   const [expenseFormMessage, setExpenseFormMessage] = useState({ type: '', text: '' })
   const [expenseFormValues, setExpenseFormValues] = useState({
     description: '',
@@ -400,6 +415,43 @@ function App() {
     return true
   }, [loadProfiles, selectedTrip])
 
+  const refreshExpenses = useCallback(async () => {
+    if (!selectedTrip) {
+      return false
+    }
+
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('trip_id', selectedTrip.id)
+
+    if (error) {
+      return false
+    }
+
+    const refreshedExpenses = data || []
+    setExpenses(refreshedExpenses)
+
+    if (refreshedExpenses.length === 0) {
+      setExpenseSplits([])
+      return true
+    }
+
+    const expenseIds = refreshedExpenses.map((expense) => expense.id)
+    const { data: splitData, error: splitError } = await supabase
+      .from('expense_splits')
+      .select('*')
+      .in('expense_id', expenseIds)
+
+    if (splitError) {
+      setExpenseSplits([])
+      return false
+    }
+
+    setExpenseSplits(splitData || [])
+    return true
+  }, [selectedTrip])
+
   useEffect(() => {
     let isMounted = true
 
@@ -478,39 +530,16 @@ function App() {
       setIsExpensesLoading(true)
       setExpensesError('')
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('trip_id', selectedTrip.id)
-
-      if (error) {
+      const refreshed = await refreshExpenses()
+      if (!refreshed) {
         setExpensesError('We could not load the expenses for this trip. Please try again.')
-      } else {
-        setExpenses(data || [])
-
-        if (!data || data.length === 0) {
-          setExpenseSplits([])
-        } else {
-          const expenseIds = data.map((expense) => expense.id)
-          const { data: splitData, error: splitError } = await supabase
-            .from('expense_splits')
-            .select('*')
-            .in('expense_id', expenseIds)
-
-          if (splitError) {
-            setExpensesError('Expenses loaded, but we could not load their splits.')
-            setExpenseSplits([])
-          } else {
-            setExpenseSplits(splitData || [])
-          }
-        }
       }
 
       setIsExpensesLoading(false)
     }
 
     loadExpenses()
-  }, [selectedTrip])
+  }, [refreshExpenses, selectedTrip])
 
   const refreshItinerary = useCallback(async () => {
     if (!selectedTrip) {
@@ -657,6 +686,8 @@ function App() {
     setMemberFormMessage({ type: '', text: '' })
     setIsAddExpenseOpen(false)
     setExpenseFormMessage({ type: '', text: '' })
+    setEditingExpenseId('')
+    setDeletingExpenseId('')
     setItineraryItems([])
     setItineraryError('')
     setIsItineraryFormOpen(false)
@@ -871,6 +902,8 @@ function App() {
   }
 
   const openAddExpenseForm = () => {
+    setEditingExpenseId('')
+    clearExpenseForm()
     setExpenseFormMessage({ type: '', text: '' })
     setIsAddExpenseOpen(true)
   }
@@ -879,6 +912,7 @@ function App() {
     if (!isExpenseSaving) {
       setIsAddExpenseOpen(false)
       setExpenseFormMessage({ type: '', text: '' })
+      setEditingExpenseId('')
     }
   }
 
@@ -959,12 +993,11 @@ function App() {
       return
     }
 
-    const amountPerMember = Number(expenseFormValues.amount) / expenseFormValues.sharedBy.length
-    const splitRows = expenseFormValues.sharedBy.map((userId) => ({
-      expense_id: createdExpense.id,
-      user_id: userId,
-      amount_owed: amountPerMember,
-    }))
+    const splitRows = createEqualSplitRows(
+      createdExpense.id,
+      Number(expenseFormValues.amount),
+      expenseFormValues.sharedBy,
+    )
     const { error: splitError } = await supabase.from('expense_splits').insert(splitRows)
 
     if (splitError) {
@@ -976,37 +1009,172 @@ function App() {
       return
     }
 
-    const { data, error: refreshError } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('trip_id', selectedTrip.id)
-
-    if (refreshError) {
+    const refreshed = await refreshExpenses()
+    if (!refreshed) {
       setExpensesError('The expense was added, but we could not refresh the expense list.')
-    } else {
-      setExpenses(data || [])
-      const expenseIds = (data || []).map((expense) => expense.id)
-
-      if (expenseIds.length === 0) {
-        setExpenseSplits([])
-      } else {
-        const { data: splitData, error: splitError } = await supabase
-          .from('expense_splits')
-          .select('*')
-          .in('expense_id', expenseIds)
-
-        if (splitError) {
-          setExpensesError('The expense was added, but we could not refresh its splits.')
-        } else {
-          setExpenseSplits(splitData || [])
-        }
-      }
     }
 
     clearExpenseForm()
     setIsAddExpenseOpen(false)
     setExpenseFormMessage({ type: 'success', text: 'Expense added successfully.' })
     setIsExpenseSaving(false)
+  }
+
+  const openEditExpenseForm = (expense) => {
+    const sharedBy = expenseSplits
+      .filter((split) => split.expense_id === expense.id)
+      .map((split) => split.user_id)
+      .filter((userId) => tripMembers.some((member) => member.user_id === userId))
+
+    setEditingExpenseId(expense.id)
+    setExpenseFormValues({
+      description: expense.description || '',
+      amount: expense.amount === null || expense.amount === undefined ? '' : String(expense.amount),
+      paidBy: tripMembers.some((member) => member.user_id === expense.paid_by) ? expense.paid_by : '',
+      sharedBy,
+      category: expenseCategories.includes(expense.category) ? expense.category : 'Other',
+    })
+    setExpenseFormMessage({ type: '', text: '' })
+    setIsAddExpenseOpen(true)
+  }
+
+  const handleEditExpenseSubmit = async (event) => {
+    event.preventDefault()
+    setExpenseFormMessage({ type: '', text: '' })
+
+    const amount = Number(expenseFormValues.amount)
+    const validMemberIds = new Set(tripMembers.map((member) => member.user_id))
+    const selectedMembersAreValid = expenseFormValues.sharedBy.every((userId) => validMemberIds.has(userId))
+
+    if (!expenseFormValues.description.trim() || !expenseFormValues.amount) {
+      setExpenseFormMessage({ type: 'error', text: 'Please enter a description and amount.' })
+      return
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setExpenseFormMessage({ type: 'error', text: 'The amount must be a positive number.' })
+      return
+    }
+    if (!expenseCategories.includes(expenseFormValues.category)) {
+      setExpenseFormMessage({ type: 'error', text: 'Please select a valid expense category.' })
+      return
+    }
+    if (!validMemberIds.has(expenseFormValues.paidBy)) {
+      setExpenseFormMessage({ type: 'error', text: 'Please select a current trip member who paid.' })
+      return
+    }
+    if (expenseFormValues.sharedBy.length === 0) {
+      setExpenseFormMessage({ type: 'error', text: 'Please select at least one member to share this expense.' })
+      return
+    }
+    if (!selectedMembersAreValid) {
+      setExpenseFormMessage({ type: 'error', text: 'Shared members must belong to this trip.' })
+      return
+    }
+
+    setIsExpenseSaving(true)
+    const { error: updateError } = await supabase
+      .from('expenses')
+      .update({
+        description: expenseFormValues.description.trim(),
+        amount,
+        category: expenseFormValues.category,
+        paid_by: expenseFormValues.paidBy,
+      })
+      .eq('id', editingExpenseId)
+      .eq('trip_id', selectedTrip.id)
+
+    if (updateError) {
+      setExpenseFormMessage({ type: 'error', text: 'We could not update this expense. Please try again.' })
+      setIsExpenseSaving(false)
+      return
+    }
+
+    const { error: deleteSplitsError } = await supabase
+      .from('expense_splits')
+      .delete()
+      .eq('expense_id', editingExpenseId)
+
+    if (deleteSplitsError) {
+      await refreshExpenses()
+      setExpenseFormMessage({
+        type: 'error',
+        text: 'The expense was updated, but its existing splits could not be replaced.',
+      })
+      setIsExpenseSaving(false)
+      return
+    }
+
+    const splitRows = createEqualSplitRows(editingExpenseId, amount, expenseFormValues.sharedBy)
+    const { error: insertSplitsError } = await supabase.from('expense_splits').insert(splitRows)
+
+    if (insertSplitsError) {
+      await refreshExpenses()
+      setExpenseFormMessage({
+        type: 'error',
+        text: 'The expense was updated, but the new splits could not be saved.',
+      })
+      setIsExpenseSaving(false)
+      return
+    }
+
+    const refreshed = await refreshExpenses()
+    if (!refreshed) {
+      setExpenseFormMessage({
+        type: 'error',
+        text: 'The expense was updated, but we could not refresh the expense data.',
+      })
+      setIsExpenseSaving(false)
+      return
+    }
+
+    clearExpenseForm()
+    setEditingExpenseId('')
+    setIsAddExpenseOpen(false)
+    setExpenseFormMessage({ type: 'success', text: 'Expense updated successfully.' })
+    setIsExpenseSaving(false)
+  }
+
+  const handleDeleteExpense = async (expenseId) => {
+    const confirmed = window.confirm('Are you sure you want to delete this expense? This will also remove its expense split.')
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingExpenseId(expenseId)
+    setExpenseFormMessage({ type: '', text: '' })
+
+    const { error: deleteSplitsError } = await supabase
+      .from('expense_splits')
+      .delete()
+      .eq('expense_id', expenseId)
+
+    if (deleteSplitsError) {
+      await refreshExpenses()
+      setExpenseFormMessage({ type: 'error', text: 'We could not delete this expense’s splits, so the expense was kept.' })
+      setDeletingExpenseId('')
+      return
+    }
+
+    const { error: deleteExpenseError } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('id', expenseId)
+      .eq('trip_id', selectedTrip.id)
+
+    if (deleteExpenseError) {
+      await refreshExpenses()
+      setExpenseFormMessage({ type: 'error', text: 'The expense splits were removed, but the expense could not be deleted.' })
+      setDeletingExpenseId('')
+      return
+    }
+
+    const refreshed = await refreshExpenses()
+    if (!refreshed) {
+      setExpenseFormMessage({ type: 'error', text: 'The expense was deleted, but we could not refresh the expense data.' })
+    } else {
+      setExpenseFormMessage({ type: 'success', text: 'Expense deleted successfully.' })
+    }
+    setDeletingExpenseId('')
   }
 
   const openAddItineraryForm = () => {
@@ -1882,7 +2050,8 @@ function App() {
               <button className="secondary-button" type="button" onClick={openAddExpenseForm}>Add Expense</button>
             </div>
             {isAddExpenseOpen && (
-              <form className="expense-form" onSubmit={handleAddExpenseSubmit}>
+              <form className="expense-form" onSubmit={editingExpenseId ? handleEditExpenseSubmit : handleAddExpenseSubmit}>
+                <p className="expense-form-title">{editingExpenseId ? 'Edit expense' : 'Add an expense'}</p>
                 <label>
                   Expense description
                   <input name="description" type="text" value={expenseFormValues.description} onChange={handleExpenseInputChange} required />
@@ -1930,7 +2099,7 @@ function App() {
                 )}
                 <div className="member-form-actions">
                   <button className="auth-submit" type="submit" disabled={isExpenseSaving || tripMembers.length === 0}>
-                    {isExpenseSaving ? 'Adding expense…' : 'Add expense'}
+                    {isExpenseSaving ? 'Saving expense…' : editingExpenseId ? 'Save changes' : 'Add expense'}
                   </button>
                   <button className="cancel-button" type="button" onClick={closeAddExpenseForm} disabled={isExpenseSaving}>Cancel</button>
                 </div>
@@ -1948,12 +2117,18 @@ function App() {
               <div className="expenses-list">
                 {expenses.map((expense) => (
                   <div className="expense-row" key={expense.id || `${expense.description}-${expense.paid_by}`}>
-                    <div>
+                    <div className="expense-details">
                       <strong>{expense.description}</strong>
-                    <span className="expense-category">{expense.category || 'Other'}</span>
-                    <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers, profiles)}</span>
-                  </div>
+                      <span className="expense-category">{expense.category || 'Other'}</span>
+                      <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers, profiles)}</span>
+                    </div>
+                    <div className="expense-row-actions">
                     <span className="expense-amount">{expense.amount}</span>
+                      <button className="expense-edit-button" type="button" onClick={() => openEditExpenseForm(expense)} disabled={deletingExpenseId !== '' || isExpenseSaving}>Edit</button>
+                      <button className="expense-delete-button" type="button" onClick={() => handleDeleteExpense(expense.id)} disabled={deletingExpenseId !== '' || isExpenseSaving}>
+                        {deletingExpenseId === expense.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
