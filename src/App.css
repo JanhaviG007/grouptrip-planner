@@ -70,7 +70,8 @@ h1 span, h2 span { color: var(--green); font-family: var(--serif); font-style: i
 .trips-error { color: #9b3d3d; }
 .trip-success { margin: 0 0 20px; padding: 11px 13px; color: var(--green-dark); background: #e8f3ea; border-radius: 6px; font-size: 13px; }
 .trips-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.trip-card { padding: 24px; background: var(--cream); border: 1px solid var(--line); border-radius: 8px; }
+.trip-card { padding: 24px; background: var(--cream); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.trip-card:hover, .trip-card:focus-visible { border-color: var(--green); box-shadow: 0 8px 20px rgba(47, 72, 59, .08); transform: translateY(-2px); outline: none; }
 .trip-card h3 { margin-bottom: 8px; }
 .trip-destination { margin-bottom: 16px; color: var(--green); font-weight: 600; }
 .trip-dates { margin: 0; color: var(--muted); font-size: 13px; }
@@ -103,6 +104,18 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .auth-submit:hover:not(:disabled) { background: var(--green-dark); }
 .form-introduction { margin: -1px 0 25px; color: var(--muted); font-size: 13px; }
 .date-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.trip-details-modal { width: min(100%, 520px); }
+.back-button { padding: 0; margin-bottom: 28px; color: var(--green); background: transparent; border: 0; font-size: 13px; font-weight: 700; }
+.trip-details-modal h2 { margin-bottom: 18px; }
+.trip-summary { padding: 16px; margin-bottom: 30px; background: var(--cream); border-radius: 7px; }
+.trip-summary .trip-destination { margin-bottom: 8px; }
+.members-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+.members-heading h3 { margin: 0; }
+.members-heading .secondary-button { padding: 10px 14px; font-size: 12px; }
+.members-list { display: grid; gap: 9px; }
+.member-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px; background: #fbfcfa; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+.member-id { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.member-budget { color: var(--ink); font-weight: 600; white-space: nowrap; }
 
 @media (max-width: 700px) {
   .container { width: min(100% - 40px, 560px); }
@@ -131,4 +144,6 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .footer-content p { margin-top: 17px; }
   .auth-modal { padding: 33px 24px 25px; }
   .date-fields { grid-template-columns: 1fr; gap: 16px; }
+  .members-heading { align-items: flex-start; flex-direction: column; }
+  .member-row { align-items: flex-start; flex-direction: column; gap: 6px; }
 }

@@ -49,6 +49,10 @@ function App() {
   const [isTripsLoading, setIsTripsLoading] = useState(false)
   const [tripsError, setTripsError] = useState('')
   const [tripSuccessMessage, setTripSuccessMessage] = useState('')
+  const [selectedTrip, setSelectedTrip] = useState(null)
+  const [tripMembers, setTripMembers] = useState([])
+  const [isMembersLoading, setIsMembersLoading] = useState(false)
+  const [membersError, setMembersError] = useState('')
   const [isTripFormOpen, setIsTripFormOpen] = useState(false)
   const [isTripSaving, setIsTripSaving] = useState(false)
   const [tripFormMessage, setTripFormMessage] = useState('')
@@ -112,6 +116,32 @@ function App() {
 
     loadTrips()
   }, [session])
+
+  useEffect(() => {
+    if (!selectedTrip) {
+      return
+    }
+
+    const loadTripMembers = async () => {
+      setIsMembersLoading(true)
+      setMembersError('')
+
+      const { data, error } = await supabase
+        .from('trip_members')
+        .select('*')
+        .eq('trip_id', selectedTrip.id)
+
+      if (error) {
+        setMembersError('We could not load the members for this trip. Please try again.')
+      } else {
+        setTripMembers(data || [])
+      }
+
+      setIsMembersLoading(false)
+    }
+
+    loadTripMembers()
+  }, [selectedTrip])
 
   const openAuth = (mode = 'login') => {
     setAuthMode(mode)
@@ -196,6 +226,18 @@ function App() {
     if (error) {
       setAuthMessage({ type: 'error', text: 'We could not log you out. Please try again.' })
     }
+  }
+
+  const openTripDetails = (trip) => {
+    setSelectedTrip(trip)
+    setTripMembers([])
+    setMembersError('')
+  }
+
+  const closeTripDetails = () => {
+    setSelectedTrip(null)
+    setTripMembers([])
+    setMembersError('')
   }
 
   const openTripForm = () => {
@@ -350,7 +392,19 @@ function App() {
               {!isTripsLoading && !tripsError && trips.length > 0 && (
                 <div className="trips-grid">
                   {trips.map((trip) => (
-                    <article className="trip-card" key={trip.id}>
+                    <article
+                      className="trip-card"
+                      key={trip.id}
+                      role="button"
+                      tabIndex="0"
+                      onClick={() => openTripDetails(trip)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openTripDetails(trip)
+                        }
+                      }}
+                    >
                       <h3>{trip.name}</h3>
                       <p className="trip-destination">{trip.destination}</p>
                       <p className="trip-dates">{trip.start_date} <span aria-hidden="true">→</span> {trip.end_date}</p>
@@ -390,6 +444,49 @@ function App() {
           <p>Plan trips together, without the budget stress.</p>
         </div>
       </footer>
+
+      {selectedTrip && (
+        <div className="auth-backdrop" role="presentation" onMouseDown={closeTripDetails}>
+          <section
+            className="auth-modal trip-details-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trip-details-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="close-button" type="button" aria-label="Close trip details" onClick={closeTripDetails}>×</button>
+            <button className="back-button" type="button" onClick={closeTripDetails}>← Back to My Trips</button>
+            <p className="eyebrow">Trip details</p>
+            <h2 id="trip-details-title">{selectedTrip.name}</h2>
+            <div className="trip-summary">
+              <p className="trip-destination">{selectedTrip.destination}</p>
+              <p className="trip-dates">{selectedTrip.start_date} <span aria-hidden="true">→</span> {selectedTrip.end_date}</p>
+            </div>
+
+            <div className="members-heading">
+              <h3>Trip Members</h3>
+              <button className="secondary-button" type="button">Add Member</button>
+            </div>
+            {isMembersLoading && <p className="trips-status">Loading members…</p>}
+            {!isMembersLoading && membersError && <p className="trips-status trips-error">{membersError}</p>}
+            {!isMembersLoading && !membersError && tripMembers.length === 0 && (
+              <p className="trips-status">No members added yet.</p>
+            )}
+            {!isMembersLoading && !membersError && tripMembers.length > 0 && (
+              <div className="members-list">
+                {tripMembers.map((member) => (
+                  <div className="member-row" key={member.user_id}>
+                    <span className="member-id">{member.user_id}</span>
+                    <span className="member-budget">
+                      {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {isTripFormOpen && (
         <div className="auth-backdrop" role="presentation" onMouseDown={closeTripForm}>
