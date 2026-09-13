@@ -98,6 +98,15 @@ h1 span, h2 span { color: var(--green); font-family: var(--serif); font-style: i
 .trips-subheading { margin: 9px 0 0; color: var(--muted); font-size: 14px; }
 .trips-status { margin: 0; color: var(--muted); font-size: 15px; }
 .trips-error { color: #9b3d3d; }
+.loading-state { display: flex; align-items: center; gap: 9px; margin: 0; color: var(--muted); font-size: 13px; }
+.loading-state::before { width: 13px; height: 13px; border: 2px solid #cfe0d3; border-top-color: var(--green); border-radius: 50%; content: ''; animation: loading-spin .8s linear infinite; }
+.inline-error { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 12px 13px; background: #fff8f7; border: 1px solid #efd8d4; border-radius: var(--radius-sm); }
+.inline-error .trips-status { margin: 0; }
+.retry-button { flex-shrink: 0; padding: 7px 11px; color: var(--green-dark); background: #edf6f1; border: 1px solid #b9d2c1; border-radius: 5px; font-size: 11px; font-weight: 700; }
+.retry-button:hover { background: #e1f0e6; }
+.section-empty-state { padding: 18px 16px; background: #f7faf7; border: 1px dashed #cbdace; border-radius: var(--radius-sm); }
+.section-empty-state strong { display: block; margin-bottom: 5px; font-size: 13px; }
+.section-empty-state p { margin: 0; color: var(--muted); font-size: 12px; }
 .trip-success { margin: 0 0 20px; padding: 11px 13px; color: var(--green-dark); background: #e8f3ea; border-radius: 6px; font-size: 13px; }
 .trips-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .trip-card { padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
@@ -534,6 +543,9 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   background: #f5f8f5;
   border-color: #c8d9cc;
 }
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
 
 @media (max-width: 760px) {
   .container { width: min(100% - 40px, 620px); }
@@ -556,4 +568,6 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .budget-total-row { grid-template-columns: 1fr 1fr; }
   .member-form-actions { align-items: stretch; flex-direction: column; }
   .expense-row-actions { flex-wrap: wrap; }
+  .inline-error { align-items: flex-start; flex-direction: column; }
+  .retry-button { width: 100%; }
 }

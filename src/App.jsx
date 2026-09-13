@@ -336,11 +336,13 @@ function App() {
   const [authMode, setAuthMode] = useState('login')
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLogoutLoading, setIsLogoutLoading] = useState(false)
   const [authMessage, setAuthMessage] = useState({ type: '', text: '' })
   const [trips, setTrips] = useState([])
   const [isTripsLoading, setIsTripsLoading] = useState(false)
   const [tripsError, setTripsError] = useState('')
   const [tripSuccessMessage, setTripSuccessMessage] = useState('')
+  const [tripDetailsRetryKey, setTripDetailsRetryKey] = useState(0)
   const [selectedTrip, setSelectedTrip] = useState(null)
   const [tripMembers, setTripMembers] = useState([])
   const [profiles, setProfiles] = useState({})
@@ -385,6 +387,7 @@ function App() {
   })
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isMemberSaving, setIsMemberSaving] = useState(false)
+  const [memberSaveStage, setMemberSaveStage] = useState('')
   const [memberFormMessage, setMemberFormMessage] = useState({ type: '', text: '' })
   const [memberFormValues, setMemberFormValues] = useState({
     email: '',
@@ -452,6 +455,31 @@ function App() {
     return true
   }, [loadProfiles, selectedTrip])
 
+  const refreshTrips = useCallback(async () => {
+    if (!session) {
+      return false
+    }
+
+    setIsTripsLoading(true)
+    setTripsError('')
+
+    const { data, error } = await supabase
+      .from('trips')
+      .select('*')
+      .eq('created_by', session.user.id)
+      .order('start_date', { ascending: true })
+
+    if (error) {
+      setTripsError('We could not load your trips. Please try again.')
+      setIsTripsLoading(false)
+      return false
+    }
+
+    setTrips(data || [])
+    setIsTripsLoading(false)
+    return true
+  }, [session])
+
   const refreshExpenses = useCallback(async () => {
     if (!selectedTrip) {
       return false
@@ -516,26 +544,11 @@ function App() {
     }
 
     const loadTrips = async () => {
-      setIsTripsLoading(true)
-      setTripsError('')
-
-      const { data, error } = await supabase
-        .from('trips')
-        .select('*')
-        .eq('created_by', session.user.id)
-        .order('start_date', { ascending: true })
-
-      if (error) {
-        setTripsError('We could not load your trips. Please try again.')
-      } else {
-        setTrips(data || [])
-      }
-
-      setIsTripsLoading(false)
+      await refreshTrips()
     }
 
     loadTrips()
-  }, [session])
+  }, [refreshTrips, session])
 
   useEffect(() => {
     if (!selectedTrip) {
@@ -556,7 +569,7 @@ function App() {
     }
 
     loadTripMembers()
-  }, [refreshTripMembers, selectedTrip])
+  }, [refreshTripMembers, selectedTrip, tripDetailsRetryKey])
 
   useEffect(() => {
     if (!selectedTrip) {
@@ -576,7 +589,7 @@ function App() {
     }
 
     loadExpenses()
-  }, [refreshExpenses, selectedTrip])
+  }, [refreshExpenses, selectedTrip, tripDetailsRetryKey])
 
   const refreshItinerary = useCallback(async () => {
     if (!selectedTrip) {
@@ -617,7 +630,46 @@ function App() {
     }
 
     loadItinerary()
-  }, [refreshItinerary, selectedTrip])
+  }, [refreshItinerary, selectedTrip, tripDetailsRetryKey])
+
+  useEffect(() => {
+    if (!tripSuccessMessage) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => setTripSuccessMessage(''), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [tripSuccessMessage])
+
+  useEffect(() => {
+    const successMessages = [
+      memberActionMessage.type === 'success' ? 'memberActionMessage' : '',
+      memberFormMessage.type === 'success' ? 'memberFormMessage' : '',
+      expenseFormMessage.type === 'success' ? 'expenseFormMessage' : '',
+      itineraryFormMessage.type === 'success' ? 'itineraryFormMessage' : '',
+    ].filter(Boolean)
+
+    if (successMessages.length === 0) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (successMessages.includes('memberActionMessage')) {
+        setMemberActionMessage({ type: '', text: '' })
+      }
+      if (successMessages.includes('memberFormMessage')) {
+        setMemberFormMessage({ type: '', text: '' })
+      }
+      if (successMessages.includes('expenseFormMessage')) {
+        setExpenseFormMessage({ type: '', text: '' })
+      }
+      if (successMessages.includes('itineraryFormMessage')) {
+        setItineraryFormMessage({ type: '', text: '' })
+      }
+    }, 4500)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [expenseFormMessage, itineraryFormMessage, memberActionMessage, memberFormMessage])
 
   const openAuth = (mode = 'login') => {
     setAuthMode(mode)
@@ -697,11 +749,21 @@ function App() {
   }
 
   const handleLogout = async () => {
+    if (isLogoutLoading) {
+      return
+    }
+
+    setIsLogoutLoading(true)
     const { error } = await supabase.auth.signOut()
 
     if (error) {
       setAuthMessage({ type: 'error', text: 'We could not log you out. Please try again.' })
     }
+    setIsLogoutLoading(false)
+  }
+
+  const retryTripDetails = () => {
+    setTripDetailsRetryKey((currentKey) => currentKey + 1)
   }
 
   const openTripDetails = (trip) => {
@@ -769,6 +831,7 @@ function App() {
     }
 
     setIsMemberSaving(true)
+    setMemberSaveStage('finding')
 
     const { data: user, error: lookupError } = await supabase.functions.invoke(
       'lookup-user',
@@ -783,9 +846,11 @@ function App() {
         text: 'No registered user was found with that email address.',
       })
       setIsMemberSaving(false)
+      setMemberSaveStage('')
       return
     }
 
+    setMemberSaveStage('adding')
     const { error: insertError } = await supabase.from('trip_members').insert({
       trip_id: selectedTrip.id,
       user_id: userId,
@@ -798,6 +863,7 @@ function App() {
         : 'We could not add this member. Please try again.'
       setMemberFormMessage({ type: 'error', text: message })
       setIsMemberSaving(false)
+      setMemberSaveStage('')
       return
     }
 
@@ -811,6 +877,7 @@ function App() {
     setIsAddMemberOpen(false)
     setMemberFormMessage({ type: 'success', text: 'Member added successfully.' })
     setIsMemberSaving(false)
+    setMemberSaveStage('')
   }
 
   const handleRemoveMember = async (userId) => {
@@ -1040,7 +1107,7 @@ function App() {
     if (splitError) {
       setExpenseFormMessage({
         type: 'error',
-        text: 'The expense was created, but the member splits could not be saved. Please do not add it again.',
+        text: 'The expense was created, but the split could not be saved. Please check the expense before continuing.',
       })
       setIsExpenseSaving(false)
       return
@@ -1426,15 +1493,7 @@ function App() {
     setTripSuccessMessage('Your trip was created successfully.')
     setIsTripSaving(false)
 
-    const { data, error: loadError } = await supabase
-      .from('trips')
-      .select('*')
-      .eq('created_by', session.user.id)
-      .order('start_date', { ascending: true })
-
-    if (!loadError) {
-      setTrips(data || [])
-    }
+    await refreshTrips()
   }
 
   const userName = session?.user?.user_metadata?.full_name
@@ -1560,7 +1619,9 @@ function App() {
             {session ? (
               <>
                 <span className="user-label" title={session.user.email}>{userLabel}</span>
-                <button className="login-button" type="button" onClick={handleLogout}>Logout</button>
+                <button className="login-button" type="button" onClick={handleLogout} disabled={isLogoutLoading}>
+                  {isLogoutLoading ? 'Signing out…' : 'Logout'}
+                </button>
               </>
             ) : (
               <button className="login-button" type="button" onClick={() => openAuth()}>Login</button>
@@ -1640,8 +1701,13 @@ function App() {
                 <button className="secondary-button" type="button" onClick={openTripForm}>Create another trip</button>
               </div>
               {tripSuccessMessage && <p className="trip-success" role="status">{tripSuccessMessage}</p>}
-              {isTripsLoading && <p className="trips-status">Loading your trips…</p>}
-              {!isTripsLoading && tripsError && <p className="trips-status trips-error">{tripsError}</p>}
+              {isTripsLoading && <p className="loading-state" role="status">Loading your trips…</p>}
+              {!isTripsLoading && tripsError && (
+                <div className="inline-error">
+                  <p className="trips-status trips-error" role="alert">{tripsError}</p>
+                  <button className="retry-button" type="button" onClick={refreshTrips}>Try again</button>
+                </div>
+              )}
               {!isTripsLoading && !tripsError && trips.length === 0 && (
                 <div className="trips-empty-state">
                   <div className="empty-state-icon" aria-hidden="true">✦</div>
@@ -2006,14 +2072,21 @@ function App() {
                   )}
                   <div className="member-form-actions">
                     <button className="auth-submit" type="submit" disabled={isItinerarySaving}>
-                      {isItinerarySaving ? 'Saving activity…' : editingItineraryId ? 'Save changes' : 'Add activity'}
+                      {isItinerarySaving
+                        ? editingItineraryId ? 'Saving activity…' : 'Adding activity…'
+                        : editingItineraryId ? 'Save changes' : 'Add activity'}
                     </button>
                     <button className="cancel-button" type="button" onClick={closeItineraryForm} disabled={isItinerarySaving}>Cancel</button>
                   </div>
                 </form>
               )}
-              {isItineraryLoading && <p className="trips-status">Loading itinerary…</p>}
-              {!isItineraryLoading && itineraryError && <p className="trips-status trips-error">{itineraryError}</p>}
+              {isItineraryLoading && <p className="loading-state" role="status">Loading itinerary…</p>}
+              {!isItineraryLoading && itineraryError && (
+                <div className="inline-error">
+                  <p className="trips-status trips-error" role="alert">{itineraryError}</p>
+                  <button className="retry-button" type="button" onClick={retryTripDetails}>Try again</button>
+                </div>
+              )}
               {!isItineraryLoading && !itineraryError && itineraryItems.length === 0 && (
                 <div className="itinerary-empty-state">
                   <strong>No activities planned yet.</strong>
@@ -2156,7 +2229,9 @@ function App() {
                 )}
                 <div className="member-form-actions">
                   <button className="auth-submit" type="submit" disabled={isMemberSaving}>
-                    {isMemberSaving ? 'Adding member…' : 'Add member'}
+                    {isMemberSaving
+                      ? memberSaveStage === 'finding' ? 'Finding member…' : 'Adding member…'
+                      : 'Add member'}
                   </button>
                   <button className="cancel-button" type="button" onClick={closeAddMemberForm} disabled={isMemberSaving}>Cancel</button>
                 </div>
@@ -2165,8 +2240,13 @@ function App() {
             {!isAddMemberOpen && memberFormMessage.type === 'success' && (
               <p className="auth-message success member-success" role="status">{memberFormMessage.text}</p>
             )}
-            {isMembersLoading && <p className="trips-status">Loading members…</p>}
-            {!isMembersLoading && membersError && <p className="trips-status trips-error">{membersError}</p>}
+            {isMembersLoading && <p className="loading-state" role="status">Loading trip details…</p>}
+            {!isMembersLoading && membersError && (
+              <div className="inline-error">
+                <p className="trips-status trips-error" role="alert">{membersError}</p>
+                <button className="retry-button" type="button" onClick={retryTripDetails}>Try again</button>
+              </div>
+            )}
             {!isMembersLoading && !membersError && tripMembers.length === 0 && (
               <p className="trips-status">No members added yet.</p>
             )}
@@ -2293,10 +2373,18 @@ function App() {
             {!isAddExpenseOpen && expenseFormMessage.type === 'success' && (
               <p className="auth-message success member-success" role="status">{expenseFormMessage.text}</p>
             )}
-            {isExpensesLoading && <p className="trips-status">Loading expenses…</p>}
-            {!isExpensesLoading && expensesError && <p className="trips-status trips-error">{expensesError}</p>}
+            {isExpensesLoading && <p className="loading-state" role="status">Loading expenses…</p>}
+            {!isExpensesLoading && expensesError && (
+              <div className="inline-error">
+                <p className="trips-status trips-error" role="alert">{expensesError}</p>
+                <button className="retry-button" type="button" onClick={retryTripDetails}>Try again</button>
+              </div>
+            )}
             {!isExpensesLoading && !expensesError && expenses.length === 0 && (
-              <p className="trips-status">No expenses added yet.</p>
+              <div className="section-empty-state">
+                <strong>No expenses yet.</strong>
+                <p>Add your first expense to start tracking spending.</p>
+              </div>
             )}
             {!isExpensesLoading && !expensesError && expenses.length > 0 && (
               <div className="expenses-list">
@@ -2356,7 +2444,7 @@ function App() {
               </div>
               {tripFormMessage && <p className="auth-message error" role="alert">{tripFormMessage}</p>}
               <button className="auth-submit" type="submit" disabled={isTripSaving}>
-                {isTripSaving ? 'Saving trip…' : 'Create trip'}
+                {isTripSaving ? 'Creating trip…' : 'Create trip'}
               </button>
             </form>
           </section>
@@ -2407,7 +2495,9 @@ function App() {
                 <p className={`auth-message ${authMessage.type}`} role="status">{authMessage.text}</p>
               )}
               <button className="auth-submit" type="submit" disabled={isLoading}>
-                {isLoading ? 'Please wait…' : authMode === 'login' ? 'Log in' : 'Create account'}
+                {isLoading
+                  ? authMode === 'login' ? 'Signing in…' : 'Creating account…'
+                  : authMode === 'login' ? 'Log in' : 'Create account'}
               </button>
             </form>
           </section>
