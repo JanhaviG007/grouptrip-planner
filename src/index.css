@@ -2,6 +2,13 @@ html {
   scroll-behavior: smooth;
 }
 
+::selection {
+  color: #fff;
+  background: #2f6952;
+}
+
 body {
   min-width: 320px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
