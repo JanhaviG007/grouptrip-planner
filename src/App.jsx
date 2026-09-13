@@ -43,7 +43,12 @@ function formatCurrency(value) {
   return `£${Number(value || 0).toFixed(2)}`
 }
 
-function getMemberLabel(userId, members) {
+function getMemberLabel(userId, members, profiles) {
+  const profileName = profiles[userId]?.full_name
+  if (profileName) {
+    return profileName
+  }
+
   const memberIndex = members.findIndex((member) => member.user_id === userId)
   return memberIndex >= 0 ? `Member ${memberIndex + 1}` : 'Unknown member'
 }
@@ -111,6 +116,7 @@ function App() {
   const [tripSuccessMessage, setTripSuccessMessage] = useState('')
   const [selectedTrip, setSelectedTrip] = useState(null)
   const [tripMembers, setTripMembers] = useState([])
+  const [profiles, setProfiles] = useState({})
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
   const [expenses, setExpenses] = useState([])
@@ -148,6 +154,36 @@ function App() {
     password: '',
     confirmPassword: '',
   })
+
+  const loadProfiles = async (members) => {
+    const memberIds = members.map((member) => member.user_id)
+
+    if (memberIds.length === 0) {
+      setProfiles({})
+      return
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', memberIds)
+
+    if (profileError) {
+      console.error('We could not load member profiles.', profileError)
+      setProfiles({})
+      return
+    }
+
+    const profilesById = (profileData || []).reduce((profileMap, profile) => ({
+      ...profileMap,
+      [profile.id]: {
+        id: profile.id,
+        full_name: profile.full_name,
+      },
+    }), {})
+
+    setProfiles(profilesById)
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -214,7 +250,9 @@ function App() {
       if (error) {
         setMembersError('We could not load the members for this trip. Please try again.')
       } else {
-        setTripMembers(data || [])
+        const members = data || []
+        setTripMembers(members)
+        await loadProfiles(members)
       }
 
       setIsMembersLoading(false)
@@ -447,7 +485,9 @@ function App() {
     if (refreshError) {
       setMembersError('The member was added, but we could not refresh the member list.')
     } else {
-      setTripMembers(refreshedMembers || [])
+      const members = refreshedMembers || []
+      setTripMembers(members)
+      await loadProfiles(members)
     }
 
     clearMemberForm()
@@ -675,7 +715,7 @@ function App() {
 
     return {
       userId: member.user_id,
-      label: `Member ${tripMembers.indexOf(member) + 1}`,
+      label: getMemberLabel(member.user_id, tripMembers, profiles),
       budget,
       paid,
       owed,
@@ -950,9 +990,9 @@ function App() {
             )}
             {!isMembersLoading && !membersError && tripMembers.length > 0 && (
               <div className="members-list">
-                {tripMembers.map((member, index) => (
+                {tripMembers.map((member) => (
                   <div className="member-row" key={member.user_id}>
-                    <span className="member-id">{`Member ${index + 1}`}</span>
+                    <span className="member-id">{getMemberLabel(member.user_id, tripMembers, profiles)}</span>
                     <span className="member-budget">
                       {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
                     </span>
@@ -979,15 +1019,15 @@ function App() {
                   Paid by
                   <select name="paidBy" value={expenseFormValues.paidBy} onChange={handleExpenseInputChange} required disabled={tripMembers.length === 0}>
                     <option value="">Select a member</option>
-                    {tripMembers.map((member, index) => (
-                      <option key={member.user_id} value={member.user_id}>{`Member ${index + 1}`}</option>
+                    {tripMembers.map((member) => (
+                      <option key={member.user_id} value={member.user_id}>{getMemberLabel(member.user_id, tripMembers, profiles)}</option>
                     ))}
                   </select>
                 </label>
                 <fieldset className="shared-by-fieldset">
                   <legend>Shared by</legend>
                   <div className="shared-by-list">
-                    {tripMembers.map((member, index) => (
+                    {tripMembers.map((member) => (
                       <label className="shared-by-option" key={member.user_id}>
                         <input
                           type="checkbox"
@@ -995,7 +1035,7 @@ function App() {
                           checked={expenseFormValues.sharedBy.includes(member.user_id)}
                           onChange={handleSharedMemberChange}
                         />
-                        <span>{`Member ${index + 1}`}</span>
+                        <span>{getMemberLabel(member.user_id, tripMembers, profiles)}</span>
                       </label>
                     ))}
                   </div>
@@ -1026,7 +1066,7 @@ function App() {
                   <div className="expense-row" key={expense.id || `${expense.description}-${expense.paid_by}`}>
                     <div>
                       <strong>{expense.description}</strong>
-                      <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers)}</span>
+                      <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers, profiles)}</span>
                     </div>
                     <span className="expense-amount">{expense.amount}</span>
                   </div>
