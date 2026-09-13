@@ -39,6 +39,15 @@ function getAuthErrorMessage(error) {
   return 'Something went wrong. Please try again.'
 }
 
+function formatCurrency(value) {
+  return `£${Number(value || 0).toFixed(2)}`
+}
+
+function getMemberLabel(userId, members) {
+  const memberIndex = members.findIndex((member) => member.user_id === userId)
+  return memberIndex >= 0 ? `Member ${memberIndex + 1}` : 'Unknown member'
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [authMode, setAuthMode] = useState('login')
@@ -529,6 +538,24 @@ function App() {
 
   const userName = session?.user?.user_metadata?.full_name
   const userLabel = userName || session?.user?.email
+  const budgetSummaries = tripMembers.map((member) => {
+    const budget = Number(member.budget || 0)
+    const spent = expenses
+      .filter((expense) => expense.paid_by === member.user_id)
+      .reduce((total, expense) => total + Number(expense.amount || 0), 0)
+
+    return {
+      userId: member.user_id,
+      label: `Member ${tripMembers.indexOf(member) + 1}`,
+      budget,
+      spent,
+      remaining: budget - spent,
+      percentage: budget > 0 ? (spent / budget) * 100 : 0,
+    }
+  })
+  const totalTripBudget = budgetSummaries.reduce((total, member) => total + member.budget, 0)
+  const totalTripSpending = expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0)
+  const totalTripRemaining = totalTripBudget - totalTripSpending
 
   return (
     <div className="app">
@@ -676,6 +703,55 @@ function App() {
               <p className="trip-dates">{selectedTrip.start_date} <span aria-hidden="true">→</span> {selectedTrip.end_date}</p>
             </div>
 
+            <div className="budget-summary">
+              <div className="budget-summary-heading">
+                <h3>Budget Summary</h3>
+              </div>
+              {budgetSummaries.length === 0 ? (
+                <p className="trips-status">Add members to see the budget summary.</p>
+              ) : (
+                <>
+                  <div className="budget-total-row">
+                    <div>
+                      <span>Total Trip Budget</span>
+                      <strong>{formatCurrency(totalTripBudget)}</strong>
+                    </div>
+                    <div>
+                      <span>Total Trip Spending</span>
+                      <strong>{formatCurrency(totalTripSpending)}</strong>
+                    </div>
+                    <div className={totalTripRemaining < 0 ? 'over-budget' : ''}>
+                      <span>Total Remaining</span>
+                      <strong>{formatCurrency(totalTripRemaining)}</strong>
+                    </div>
+                  </div>
+                  <div className="budget-list">
+                    {budgetSummaries.map((member) => {
+                      const isOverBudget = member.remaining < 0
+                      const progressWidth = Math.min(member.percentage, 100)
+
+                      return (
+                        <div className={`budget-row ${isOverBudget ? 'over-budget' : ''}`} key={member.userId}>
+                          <div className="budget-row-heading">
+                            <strong>{member.label}</strong>
+                            {isOverBudget && <span className="over-budget-label">Over budget</span>}
+                          </div>
+                          <div className="budget-values">
+                            <span>Budget: {formatCurrency(member.budget)}</span>
+                            <span>Spent: {formatCurrency(member.spent)}</span>
+                            <span>Remaining: {formatCurrency(member.remaining)}</span>
+                          </div>
+                          <div className="budget-progress" aria-label={`${Math.round(member.percentage)}% of budget spent`}>
+                            <span style={{ width: `${progressWidth}%` }}></span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             <div className="members-heading">
               <h3>Trip Members</h3>
               <button className="secondary-button" type="button" onClick={openAddMemberForm}>Add Member</button>
@@ -711,9 +787,9 @@ function App() {
             )}
             {!isMembersLoading && !membersError && tripMembers.length > 0 && (
               <div className="members-list">
-                {tripMembers.map((member) => (
+                {tripMembers.map((member, index) => (
                   <div className="member-row" key={member.user_id}>
-                    <span className="member-id">{member.user_id}</span>
+                    <span className="member-id">{`Member ${index + 1}`}</span>
                     <span className="member-budget">
                       {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
                     </span>
@@ -740,8 +816,8 @@ function App() {
                   Paid by
                   <select name="paidBy" value={expenseFormValues.paidBy} onChange={handleExpenseInputChange} required disabled={tripMembers.length === 0}>
                     <option value="">Select a member</option>
-                    {tripMembers.map((member) => (
-                      <option key={member.user_id} value={member.user_id}>{member.user_id}</option>
+                    {tripMembers.map((member, index) => (
+                      <option key={member.user_id} value={member.user_id}>{`Member ${index + 1}`}</option>
                     ))}
                   </select>
                 </label>
@@ -771,7 +847,7 @@ function App() {
                   <div className="expense-row" key={expense.id || `${expense.description}-${expense.paid_by}`}>
                     <div>
                       <strong>{expense.description}</strong>
-                      <span>Paid by: {expense.paid_by}</span>
+                      <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers)}</span>
                     </div>
                     <span className="expense-amount">{expense.amount}</span>
                   </div>
