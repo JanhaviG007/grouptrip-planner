@@ -142,8 +142,13 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .members-heading .secondary-button { padding: 10px 14px; font-size: 12px; }
 .members-list { display: grid; gap: 9px; }
 .member-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px; background: #fbfcfa; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+.member-details { display: grid; gap: 5px; min-width: 0; }
 .member-id { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .member-budget { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.remove-member-button { padding: 7px 10px; color: #9b3d3d; background: transparent; border: 1px solid #dfb9b9; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
+.remove-member-button:hover { background: #fbeded; }
+.remove-member-button:disabled { opacity: .55; cursor: not-allowed; }
+.member-action-message { margin-bottom: 18px; }
 .member-form { display: grid; gap: 14px; padding: 16px; margin-bottom: 20px; background: var(--cream); border: 1px solid var(--line); border-radius: 7px; }
 .member-form label { display: grid; gap: 7px; color: var(--ink); font-size: 13px; font-weight: 600; }
 .member-form input { width: 100%; padding: 11px 12px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; outline: none; }
@@ -201,7 +206,7 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .auth-modal { padding: 33px 24px 25px; }
   .date-fields { grid-template-columns: 1fr; gap: 16px; }
   .members-heading { align-items: flex-start; flex-direction: column; }
-  .member-row { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .member-row { align-items: flex-start; flex-direction: column; gap: 10px; }
   .budget-total-row { grid-template-columns: repeat(2, 1fr); }
   .budget-values { display: grid; gap: 5px; }
   .expenses-heading { align-items: flex-start; flex-direction: column; }

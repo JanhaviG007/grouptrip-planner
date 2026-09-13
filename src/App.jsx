@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -119,6 +119,8 @@ function App() {
   const [profiles, setProfiles] = useState({})
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
+  const [removingMemberId, setRemovingMemberId] = useState('')
+  const [memberActionMessage, setMemberActionMessage] = useState({ type: '', text: '' })
   const [expenses, setExpenses] = useState([])
   const [expenseSplits, setExpenseSplits] = useState([])
   const [isExpensesLoading, setIsExpensesLoading] = useState(false)
@@ -155,7 +157,7 @@ function App() {
     confirmPassword: '',
   })
 
-  const loadProfiles = async (members) => {
+  const loadProfiles = useCallback(async (members) => {
     const memberIds = members.map((member) => member.user_id)
 
     if (memberIds.length === 0) {
@@ -183,7 +185,23 @@ function App() {
     }), {})
 
     setProfiles(profilesById)
-  }
+  }, [])
+
+  const refreshTripMembers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('trip_members')
+      .select('*')
+      .eq('trip_id', selectedTrip.id)
+
+    if (error) {
+      return false
+    }
+
+    const members = data || []
+    setTripMembers(members)
+    await loadProfiles(members)
+    return true
+  }, [loadProfiles, selectedTrip])
 
   useEffect(() => {
     let isMounted = true
@@ -242,24 +260,17 @@ function App() {
       setIsMembersLoading(true)
       setMembersError('')
 
-      const { data, error } = await supabase
-        .from('trip_members')
-        .select('*')
-        .eq('trip_id', selectedTrip.id)
+      const refreshed = await refreshTripMembers()
 
-      if (error) {
+      if (!refreshed) {
         setMembersError('We could not load the members for this trip. Please try again.')
-      } else {
-        const members = data || []
-        setTripMembers(members)
-        await loadProfiles(members)
       }
 
       setIsMembersLoading(false)
     }
 
     loadTripMembers()
-  }, [selectedTrip])
+  }, [refreshTripMembers, selectedTrip])
 
   useEffect(() => {
     if (!selectedTrip) {
@@ -477,23 +488,91 @@ function App() {
       return
     }
 
-    const { data: refreshedMembers, error: refreshError } = await supabase
-      .from('trip_members')
-      .select('*')
-      .eq('trip_id', selectedTrip.id)
+    const refreshed = await refreshTripMembers()
 
-    if (refreshError) {
+    if (!refreshed) {
       setMembersError('The member was added, but we could not refresh the member list.')
-    } else {
-      const members = refreshedMembers || []
-      setTripMembers(members)
-      await loadProfiles(members)
     }
 
     clearMemberForm()
     setIsAddMemberOpen(false)
     setMemberFormMessage({ type: 'success', text: 'Member added successfully.' })
     setIsMemberSaving(false)
+  }
+
+  const handleRemoveMember = async (userId) => {
+    if (session.user.id === userId) {
+      setMemberActionMessage({ type: 'error', text: 'You cannot remove yourself as the trip owner.' })
+      return
+    }
+
+    const confirmed = window.confirm('Are you sure you want to remove this member from the trip?')
+    if (!confirmed) {
+      return
+    }
+
+    setRemovingMemberId(userId)
+    setMemberActionMessage({ type: '', text: '' })
+
+    const { data: tripExpenses, error: expensesCheckError } = await supabase
+      .from('expenses')
+      .select('id, paid_by')
+      .eq('trip_id', selectedTrip.id)
+
+    if (expensesCheckError) {
+      setMemberActionMessage({ type: 'error', text: 'We could not check this member’s expenses. Please try again.' })
+      setRemovingMemberId('')
+      return
+    }
+
+    const memberExpenses = (tripExpenses || []).filter((expense) => expense.paid_by === userId)
+    const tripExpenseIds = (tripExpenses || []).map((expense) => expense.id)
+    let memberSplits = []
+
+    if (tripExpenseIds.length > 0) {
+      const { data: splitData, error: splitsCheckError } = await supabase
+        .from('expense_splits')
+        .select('id')
+        .in('expense_id', tripExpenseIds)
+        .eq('user_id', userId)
+
+      if (splitsCheckError) {
+        setMemberActionMessage({ type: 'error', text: 'We could not check this member’s expense splits. Please try again.' })
+        setRemovingMemberId('')
+        return
+      }
+
+      memberSplits = splitData || []
+    }
+
+    if ((memberExpenses || []).length > 0 || memberSplits.length > 0) {
+      setMemberActionMessage({
+        type: 'error',
+        text: 'This member cannot be removed because they are connected to existing expenses or expense splits.',
+      })
+      setRemovingMemberId('')
+      return
+    }
+
+    const { error: removeError } = await supabase
+      .from('trip_members')
+      .delete()
+      .eq('trip_id', selectedTrip.id)
+      .eq('user_id', userId)
+
+    if (removeError) {
+      setMemberActionMessage({ type: 'error', text: 'We could not remove this member. Please try again.' })
+      setRemovingMemberId('')
+      return
+    }
+
+    const refreshed = await refreshTripMembers()
+    if (!refreshed) {
+      setMemberActionMessage({ type: 'error', text: 'The member was removed, but we could not refresh the member list.' })
+    } else {
+      setMemberActionMessage({ type: 'success', text: 'Member removed successfully.' })
+    }
+    setRemovingMemberId('')
   }
 
   const openAddExpenseForm = () => {
@@ -959,6 +1038,11 @@ function App() {
               <h3>Trip Members</h3>
               <button className="secondary-button" type="button" onClick={openAddMemberForm}>Add Member</button>
             </div>
+            {memberActionMessage.text && (
+              <p className={`auth-message ${memberActionMessage.type} member-action-message`} role="alert">
+                {memberActionMessage.text}
+              </p>
+            )}
             {isAddMemberOpen && (
               <form className="member-form" onSubmit={handleAddMemberSubmit}>
                 <label>
@@ -992,10 +1076,22 @@ function App() {
               <div className="members-list">
                 {tripMembers.map((member) => (
                   <div className="member-row" key={member.user_id}>
-                    <span className="member-id">{getMemberLabel(member.user_id, tripMembers, profiles)}</span>
-                    <span className="member-budget">
-                      {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
-                    </span>
+                    <div className="member-details">
+                      <span className="member-id">{getMemberLabel(member.user_id, tripMembers, profiles)}</span>
+                      <span className="member-budget">
+                        {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
+                      </span>
+                    </div>
+                    {session.user.id !== member.user_id && (
+                      <button
+                        className="remove-member-button"
+                        type="button"
+                        onClick={() => handleRemoveMember(member.user_id)}
+                        disabled={removingMemberId !== '' && removingMemberId !== member.user_id}
+                      >
+                        {removingMemberId === member.user_id ? 'Removing…' : 'Remove'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
