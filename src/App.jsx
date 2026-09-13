@@ -113,6 +113,51 @@ function calculateSettlements(budgetSummaries) {
   }
 }
 
+function calculateTripHealth(totalTripBudget, totalSpending, largestCategory) {
+  if (totalTripBudget <= 0) {
+    return {
+      status: 'none',
+      label: 'No budget set',
+      usagePercentage: 0,
+      remaining: 0,
+      explanation: 'Set member budgets to see your trip health.',
+      supportingMessages: [],
+    }
+  }
+
+  const usagePercentage = (totalSpending / totalTripBudget) * 100
+  const remaining = totalTripBudget - totalSpending
+  let status = 'good'
+  let label = 'Good'
+  let explanation = `You're currently within your trip budget with ${formatCurrency(remaining)} remaining.`
+
+  if (usagePercentage > 90) {
+    status = 'over'
+    label = 'Over budget'
+    explanation = remaining < 0
+      ? `Your group has exceeded the planned budget by ${formatCurrency(Math.abs(remaining))}.`
+      : `You've used ${Math.round(usagePercentage)}% of the trip budget. Consider keeping an eye on further spending.`
+  } else if (usagePercentage >= 70) {
+    status = 'watch'
+    label = 'Watch your spending'
+    explanation = `You've used ${Math.round(usagePercentage)}% of the trip budget. Consider keeping an eye on further spending.`
+  }
+
+  const supportingMessages = []
+  if (largestCategory?.percentage >= 50) {
+    supportingMessages.push(`${largestCategory.category} accounts for most of your spending.`)
+  }
+
+  return {
+    status,
+    label,
+    usagePercentage,
+    remaining,
+    explanation,
+    supportingMessages,
+  }
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [authMode, setAuthMode] = useState('login')
@@ -916,6 +961,11 @@ function App() {
     }
   }, [expenses])
   const settlementResult = calculateSettlements(budgetSummaries)
+  const tripHealth = calculateTripHealth(
+    totalTripBudget,
+    spendingInsights.totalSpending,
+    spendingInsights.largestCategory,
+  )
 
   return (
     <div className="app">
@@ -1061,6 +1111,39 @@ function App() {
             <div className="trip-summary">
               <p className="trip-destination">{selectedTrip.destination}</p>
               <p className="trip-dates">{selectedTrip.start_date} <span aria-hidden="true">→</span> {selectedTrip.end_date}</p>
+            </div>
+
+            <div className={`trip-health trip-health-${tripHealth.status}`}>
+              <div className="trip-health-heading">
+                <h3>Trip Health</h3>
+                <span className="trip-health-badge">{tripHealth.label}</span>
+              </div>
+              <p className="trip-health-explanation">{tripHealth.explanation}</p>
+              {tripHealth.status !== 'none' && (
+                <>
+                  <div className="trip-health-usage">
+                    <span>{Math.round(tripHealth.usagePercentage)}% of group budget used</span>
+                    <span>{tripHealth.remaining >= 0 ? formatCurrency(tripHealth.remaining) : `${formatCurrency(Math.abs(tripHealth.remaining))} over budget`}</span>
+                  </div>
+                  <div
+                    className="trip-health-progress"
+                    role="progressbar"
+                    aria-label={`${Math.round(tripHealth.usagePercentage)}% of group budget used`}
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow={Math.min(Math.max(tripHealth.usagePercentage, 0), 100)}
+                  >
+                    <span style={{ width: `${Math.min(Math.max(tripHealth.usagePercentage, 0), 100)}%` }}></span>
+                  </div>
+                </>
+              )}
+              {tripHealth.supportingMessages.length > 0 && (
+                <div className="trip-health-supporting">
+                  {tripHealth.supportingMessages.map((message) => (
+                    <p key={message}>{message}</p>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="budget-summary">

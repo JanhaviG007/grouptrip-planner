@@ -110,6 +110,23 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .trip-details-modal h2 { margin-bottom: 18px; }
 .trip-summary { padding: 16px; margin-bottom: 30px; background: var(--cream); border-radius: 7px; }
 .trip-summary .trip-destination { margin-bottom: 8px; }
+.trip-health { padding: 22px; margin-bottom: 28px; background: #f5f8f4; border: 1px solid var(--line); border-radius: 8px; }
+.trip-health-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 14px; }
+.trip-health-heading h3 { margin: 0; }
+.trip-health-badge { padding: 5px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+.trip-health-good .trip-health-badge { color: #2f7056; background: #dcefe5; }
+.trip-health-watch .trip-health-badge { color: #8a681c; background: #f7edc9; }
+.trip-health-over .trip-health-badge { color: #9b3d3d; background: #f5dede; }
+.trip-health-none .trip-health-badge { color: var(--muted); background: #e9ece9; }
+.trip-health-explanation { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.trip-health-usage { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 7px; color: var(--muted); font-size: 11px; }
+.trip-health-usage span:last-child { color: var(--ink); font-weight: 700; text-align: right; }
+.trip-health-progress { height: 9px; margin-bottom: 16px; overflow: hidden; background: #dfe9e2; border-radius: 99px; }
+.trip-health-progress span { display: block; height: 100%; background: var(--green); border-radius: inherit; transition: width .25s ease; }
+.trip-health-watch .trip-health-progress span { background: #d0a848; }
+.trip-health-over .trip-health-progress span { background: #c46a57; }
+.trip-health-supporting { display: grid; gap: 5px; padding-top: 13px; border-top: 1px solid #dce8df; }
+.trip-health-supporting p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .budget-summary { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
 .budget-summary-heading { margin-bottom: 18px; }
 .budget-summary-heading h3 { margin: 0; }
@@ -233,6 +250,10 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .member-row-actions, .budget-edit-form { width: 100%; }
   .budget-total-row { grid-template-columns: repeat(2, 1fr); }
   .budget-values { display: grid; gap: 5px; }
+  .trip-health { padding: 18px; }
+  .trip-health-heading { align-items: flex-start; flex-direction: column; }
+  .trip-health-usage { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .trip-health-usage span:last-child { text-align: left; }
   .spending-insights { padding: 18px; }
   .spending-insights-heading { flex-direction: column; gap: 10px; }
   .expenses-heading { align-items: flex-start; flex-direction: column; }
