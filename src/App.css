@@ -150,6 +150,11 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .expense-form input, .expense-form select { width: 100%; padding: 11px 12px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; outline: none; }
 .expense-form input:focus, .expense-form select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(63, 128, 103, .12); }
 .expense-form select:disabled { color: var(--muted); cursor: not-allowed; }
+.shared-by-fieldset { padding: 0; margin: 0; border: 0; }
+.shared-by-fieldset legend { margin-bottom: 9px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.shared-by-list { display: grid; gap: 8px; }
+.shared-by-option { display: flex !important; grid-template-columns: none !important; grid-auto-flow: column; align-items: center; gap: 9px !important; padding: 10px 11px; background: #fff; border: 1px solid var(--line); border-radius: 6px; color: var(--muted) !important; font-size: 12px !important; font-weight: 500 !important; }
+.shared-by-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--green); }
 .form-hint { margin: 0; color: var(--muted); font-size: 12px; }
 .expenses-list { display: grid; gap: 9px; }
 .expense-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px; background: #fbfcfa; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }

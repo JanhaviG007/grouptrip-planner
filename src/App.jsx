@@ -72,6 +72,7 @@ function App() {
     description: '',
     amount: '',
     paidBy: '',
+    sharedBy: [],
   })
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isMemberSaving, setIsMemberSaving] = useState(false)
@@ -408,7 +409,20 @@ function App() {
       description: '',
       amount: '',
       paidBy: '',
+      sharedBy: [],
     })
+  }
+
+  const handleSharedMemberChange = (event) => {
+    const { value, checked } = event.target
+
+    setExpenseFormValues((currentValues) => ({
+      ...currentValues,
+      sharedBy: checked
+        ? [...currentValues.sharedBy, value]
+        : currentValues.sharedBy.filter((userId) => userId !== value),
+    }))
+    setExpenseFormMessage({ type: '', text: '' })
   }
 
   const handleAddExpenseSubmit = async (event) => {
@@ -430,17 +444,43 @@ function App() {
       return
     }
 
+    if (expenseFormValues.sharedBy.length === 0) {
+      setExpenseFormMessage({ type: 'error', text: 'Please select at least one member to share this expense.' })
+      return
+    }
+
     setIsExpenseSaving(true)
 
-    const { error } = await supabase.from('expenses').insert({
-      trip_id: selectedTrip.id,
-      paid_by: expenseFormValues.paidBy,
-      description: expenseFormValues.description.trim(),
-      amount: Number(expenseFormValues.amount),
-    })
+    const { data: createdExpense, error } = await supabase
+      .from('expenses')
+      .insert({
+        trip_id: selectedTrip.id,
+        paid_by: expenseFormValues.paidBy,
+        description: expenseFormValues.description.trim(),
+        amount: Number(expenseFormValues.amount),
+      })
+      .select()
+      .single()
 
     if (error) {
       setExpenseFormMessage({ type: 'error', text: 'We could not save this expense. Please try again.' })
+      setIsExpenseSaving(false)
+      return
+    }
+
+    const amountPerMember = Number(expenseFormValues.amount) / expenseFormValues.sharedBy.length
+    const splitRows = expenseFormValues.sharedBy.map((userId) => ({
+      expense_id: createdExpense.id,
+      user_id: userId,
+      amount_owed: amountPerMember,
+    }))
+    const { error: splitError } = await supabase.from('expense_splits').insert(splitRows)
+
+    if (splitError) {
+      setExpenseFormMessage({
+        type: 'error',
+        text: 'The expense was created, but the member splits could not be saved. Please do not add it again.',
+      })
       setIsExpenseSaving(false)
       return
     }
@@ -821,6 +861,22 @@ function App() {
                     ))}
                   </select>
                 </label>
+                <fieldset className="shared-by-fieldset">
+                  <legend>Shared by</legend>
+                  <div className="shared-by-list">
+                    {tripMembers.map((member, index) => (
+                      <label className="shared-by-option" key={member.user_id}>
+                        <input
+                          type="checkbox"
+                          value={member.user_id}
+                          checked={expenseFormValues.sharedBy.includes(member.user_id)}
+                          onChange={handleSharedMemberChange}
+                        />
+                        <span>{`Member ${index + 1}`}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
                 {tripMembers.length === 0 && <p className="form-hint">Add a trip member before recording an expense.</p>}
                 {expenseFormMessage.text && (
                   <p className={`auth-message ${expenseFormMessage.type}`} role="alert">{expenseFormMessage.text}</p>
