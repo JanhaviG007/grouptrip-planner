@@ -91,6 +91,67 @@ function formatTripDate(dateValue) {
   })
 }
 
+function isValidDateOnly(dateValue) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return false
+  }
+
+  const year = Number(dateValue.slice(0, 4))
+  const month = Number(dateValue.slice(5, 7))
+  const day = Number(dateValue.slice(8, 10))
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+}
+
+function getItineraryDayNumber(startDate, activityDate) {
+  if (!isValidDateOnly(startDate) || !isValidDateOnly(activityDate)) {
+    return null
+  }
+
+  const start = Date.UTC(
+    Number(startDate.slice(0, 4)),
+    Number(startDate.slice(5, 7)) - 1,
+    Number(startDate.slice(8, 10)),
+  )
+  const activity = Date.UTC(
+    Number(activityDate.slice(0, 4)),
+    Number(activityDate.slice(5, 7)) - 1,
+    Number(activityDate.slice(8, 10)),
+  )
+  const dayNumber = Math.floor((activity - start) / (1000 * 60 * 60 * 24)) + 1
+
+  return dayNumber > 0 ? dayNumber : null
+}
+
+function formatItineraryDate(dateValue) {
+  if (!isValidDateOnly(dateValue)) {
+    return 'Date unavailable'
+  }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${dateValue}T00:00:00Z`))
+}
+
+function formatItineraryTime(timeValue) {
+  if (!/^\d{2}:\d{2}/.test(timeValue || '')) {
+    return ''
+  }
+
+  const [hours, minutes] = timeValue.slice(0, 5).split(':').map(Number)
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours % 12 || 12
+
+  return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`
+}
+
 function getAuthErrorMessage(error) {
   const message = error?.message?.toLowerCase() || ''
 
@@ -253,6 +314,22 @@ function App() {
     paidBy: '',
     sharedBy: [],
     category: 'Other',
+  })
+  const [itineraryItems, setItineraryItems] = useState([])
+  const [isItineraryLoading, setIsItineraryLoading] = useState(false)
+  const [itineraryError, setItineraryError] = useState('')
+  const [isItineraryFormOpen, setIsItineraryFormOpen] = useState(false)
+  const [isItinerarySaving, setIsItinerarySaving] = useState(false)
+  const [deletingItineraryId, setDeletingItineraryId] = useState('')
+  const [itineraryFormMessage, setItineraryFormMessage] = useState({ type: '', text: '' })
+  const [editingItineraryId, setEditingItineraryId] = useState('')
+  const [itineraryFormValues, setItineraryFormValues] = useState({
+    title: '',
+    description: '',
+    activityDate: '',
+    startTime: '',
+    endTime: '',
+    location: '',
   })
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isMemberSaving, setIsMemberSaving] = useState(false)
@@ -435,6 +512,47 @@ function App() {
     loadExpenses()
   }, [selectedTrip])
 
+  const refreshItinerary = useCallback(async () => {
+    if (!selectedTrip) {
+      return false
+    }
+
+    const { data, error } = await supabase
+      .from('itinerary_items')
+      .select('*')
+      .eq('trip_id', selectedTrip.id)
+      .order('activity_date', { ascending: true })
+      .order('start_time', { ascending: true })
+
+    if (error) {
+      return false
+    }
+
+    setItineraryItems(data || [])
+    return true
+  }, [selectedTrip])
+
+  useEffect(() => {
+    if (!selectedTrip) {
+      return
+    }
+
+    const loadItinerary = async () => {
+      setIsItineraryLoading(true)
+      setItineraryError('')
+
+      const refreshed = await refreshItinerary()
+
+      if (!refreshed) {
+        setItineraryError('We could not load the itinerary for this trip. Please try again.')
+      }
+
+      setIsItineraryLoading(false)
+    }
+
+    loadItinerary()
+  }, [refreshItinerary, selectedTrip])
+
   const openAuth = (mode = 'login') => {
     setAuthMode(mode)
     setAuthMessage({ type: '', text: '' })
@@ -524,6 +642,8 @@ function App() {
     setSelectedTrip(trip)
     setTripMembers([])
     setMembersError('')
+    setItineraryItems([])
+    setItineraryError('')
   }
 
   const closeTripDetails = () => {
@@ -537,6 +657,11 @@ function App() {
     setMemberFormMessage({ type: '', text: '' })
     setIsAddExpenseOpen(false)
     setExpenseFormMessage({ type: '', text: '' })
+    setItineraryItems([])
+    setItineraryError('')
+    setIsItineraryFormOpen(false)
+    setItineraryFormMessage({ type: '', text: '' })
+    setEditingItineraryId('')
   }
 
   const openAddMemberForm = () => {
@@ -884,6 +1009,155 @@ function App() {
     setIsExpenseSaving(false)
   }
 
+  const openAddItineraryForm = () => {
+    setEditingItineraryId('')
+    setItineraryFormValues({
+      title: '',
+      description: '',
+      activityDate: selectedTrip?.start_date || '',
+      startTime: '',
+      endTime: '',
+      location: '',
+    })
+    setItineraryFormMessage({ type: '', text: '' })
+    setIsItineraryFormOpen(true)
+  }
+
+  const openEditItineraryForm = (item) => {
+    setEditingItineraryId(item.id)
+    setItineraryFormValues({
+      title: item.title || '',
+      description: item.description || '',
+      activityDate: item.activity_date || '',
+      startTime: item.start_time ? item.start_time.slice(0, 5) : '',
+      endTime: item.end_time ? item.end_time.slice(0, 5) : '',
+      location: item.location || '',
+    })
+    setItineraryFormMessage({ type: '', text: '' })
+    setIsItineraryFormOpen(true)
+  }
+
+  const closeItineraryForm = () => {
+    if (!isItinerarySaving) {
+      setIsItineraryFormOpen(false)
+      setItineraryFormMessage({ type: '', text: '' })
+      setEditingItineraryId('')
+    }
+  }
+
+  const handleItineraryInputChange = (event) => {
+    const { name, value } = event.target
+    setItineraryFormValues((currentValues) => ({ ...currentValues, [name]: value }))
+    setItineraryFormMessage({ type: '', text: '' })
+  }
+
+  const handleItinerarySubmit = async (event) => {
+    event.preventDefault()
+    setItineraryFormMessage({ type: '', text: '' })
+
+    if (!itineraryFormValues.title.trim()) {
+      setItineraryFormMessage({ type: 'error', text: 'Please enter an activity title.' })
+      return
+    }
+
+    if (!itineraryFormValues.activityDate) {
+      setItineraryFormMessage({ type: 'error', text: 'Please choose an activity date.' })
+      return
+    }
+
+    if (
+      itineraryFormValues.startTime &&
+      itineraryFormValues.endTime &&
+      itineraryFormValues.endTime <= itineraryFormValues.startTime
+    ) {
+      setItineraryFormMessage({ type: 'error', text: 'The end time must be later than the start time.' })
+      return
+    }
+
+    setIsItinerarySaving(true)
+    const itineraryData = {
+      trip_id: selectedTrip.id,
+      title: itineraryFormValues.title.trim(),
+      description: itineraryFormValues.description.trim() || null,
+      activity_date: itineraryFormValues.activityDate,
+      start_time: itineraryFormValues.startTime || null,
+      end_time: itineraryFormValues.endTime || null,
+      location: itineraryFormValues.location.trim() || null,
+    }
+
+    const result = editingItineraryId
+      ? await supabase
+        .from('itinerary_items')
+        .update(itineraryData)
+        .eq('id', editingItineraryId)
+        .eq('trip_id', selectedTrip.id)
+      : await supabase.from('itinerary_items').insert(itineraryData)
+
+    if (result.error) {
+      setItineraryFormMessage({
+        type: 'error',
+        text: `We could not ${editingItineraryId ? 'update' : 'save'} this activity. Please try again.`,
+      })
+      setIsItinerarySaving(false)
+      return
+    }
+
+    const refreshed = await refreshItinerary()
+    if (!refreshed) {
+      setItineraryFormMessage({
+        type: 'error',
+        text: `The activity was ${editingItineraryId ? 'updated' : 'added'}, but we could not refresh the itinerary.`,
+      })
+      setIsItinerarySaving(false)
+      return
+    }
+
+    setItineraryFormValues({
+      title: '',
+      description: '',
+      activityDate: '',
+      startTime: '',
+      endTime: '',
+      location: '',
+    })
+    setIsItineraryFormOpen(false)
+    setEditingItineraryId('')
+    setItineraryFormMessage({
+      type: 'success',
+      text: editingItineraryId ? 'Activity updated successfully.' : 'Activity added successfully.',
+    })
+    setIsItinerarySaving(false)
+  }
+
+  const handleDeleteItineraryItem = async (itemId) => {
+    if (!window.confirm('Are you sure you want to delete this activity?')) {
+      return
+    }
+
+    setDeletingItineraryId(itemId)
+    setItineraryFormMessage({ type: '', text: '' })
+
+    const { error } = await supabase
+      .from('itinerary_items')
+      .delete()
+      .eq('id', itemId)
+      .eq('trip_id', selectedTrip.id)
+
+    if (error) {
+      setItineraryFormMessage({ type: 'error', text: 'We could not delete this activity. Please try again.' })
+      setDeletingItineraryId('')
+      return
+    }
+
+    const refreshed = await refreshItinerary()
+    if (!refreshed) {
+      setItineraryFormMessage({ type: 'error', text: 'The activity was deleted, but we could not refresh the itinerary.' })
+    } else {
+      setItineraryFormMessage({ type: 'success', text: 'Activity deleted successfully.' })
+    }
+    setDeletingItineraryId('')
+  }
+
   const openTripForm = () => {
     if (!session) {
       openAuth()
@@ -1035,6 +1309,17 @@ function App() {
     spendingInsights.totalSpending,
     spendingInsights.largestCategory,
   )
+  const itineraryGroups = itineraryItems.reduce((groups, item) => {
+    const dateKey = item.activity_date || 'unknown'
+    const existingGroup = groups.find((group) => group.date === dateKey)
+
+    if (existingGroup) {
+      existingGroup.items.push(item)
+      return groups
+    }
+
+    return [...groups, { date: dateKey, items: [item] }]
+  }, [])
 
   return (
     <div className="app">
@@ -1313,6 +1598,115 @@ function App() {
                     })}
                   </div>
                 </>
+              )}
+            </div>
+
+            <div className="itinerary-section">
+              <div className="itinerary-heading">
+                <div>
+                  <h3>Itinerary</h3>
+                  <p>Plan the activities that will make your trip memorable.</p>
+                </div>
+                <button className="secondary-button" type="button" onClick={openAddItineraryForm}>Add Activity</button>
+              </div>
+              {itineraryFormMessage.text && !isItineraryFormOpen && (
+                <p className={`auth-message ${itineraryFormMessage.type} itinerary-message`} role="status">
+                  {itineraryFormMessage.text}
+                </p>
+              )}
+              {isItineraryFormOpen && (
+                <form className="itinerary-form" onSubmit={handleItinerarySubmit}>
+                  <div className="itinerary-form-grid">
+                    <label>
+                      Activity title
+                      <input name="title" type="text" value={itineraryFormValues.title} onChange={handleItineraryInputChange} required />
+                    </label>
+                    <label>
+                      Date
+                      <input
+                        name="activityDate"
+                        type="date"
+                        value={itineraryFormValues.activityDate}
+                        onChange={handleItineraryInputChange}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Start time
+                      <input name="startTime" type="time" value={itineraryFormValues.startTime} onChange={handleItineraryInputChange} />
+                    </label>
+                    <label>
+                      End time
+                      <input name="endTime" type="time" value={itineraryFormValues.endTime} onChange={handleItineraryInputChange} />
+                    </label>
+                    <label>
+                      Location
+                      <input name="location" type="text" value={itineraryFormValues.location} onChange={handleItineraryInputChange} />
+                    </label>
+                  </div>
+                  <label>
+                    Description
+                    <textarea name="description" value={itineraryFormValues.description} onChange={handleItineraryInputChange} rows="3" />
+                  </label>
+                  {itineraryFormMessage.text && (
+                    <p className={`auth-message ${itineraryFormMessage.type}`} role="alert">{itineraryFormMessage.text}</p>
+                  )}
+                  <div className="member-form-actions">
+                    <button className="auth-submit" type="submit" disabled={isItinerarySaving}>
+                      {isItinerarySaving ? 'Saving activity…' : editingItineraryId ? 'Save changes' : 'Add activity'}
+                    </button>
+                    <button className="cancel-button" type="button" onClick={closeItineraryForm} disabled={isItinerarySaving}>Cancel</button>
+                  </div>
+                </form>
+              )}
+              {isItineraryLoading && <p className="trips-status">Loading itinerary…</p>}
+              {!isItineraryLoading && itineraryError && <p className="trips-status trips-error">{itineraryError}</p>}
+              {!isItineraryLoading && !itineraryError && itineraryItems.length === 0 && (
+                <div className="itinerary-empty-state">
+                  <strong>No activities planned yet.</strong>
+                  <p>Start building your trip itinerary.</p>
+                  <button className="secondary-button" type="button" onClick={openAddItineraryForm}>Add Activity</button>
+                </div>
+              )}
+              {!isItineraryLoading && !itineraryError && itineraryItems.length > 0 && (
+                <div className="itinerary-days">
+                  {itineraryGroups.map((group) => {
+                    const dayNumber = getItineraryDayNumber(selectedTrip.start_date, group.date)
+
+                    return (
+                      <div className="itinerary-day" key={group.date}>
+                        <div className="itinerary-day-heading">
+                          <span>{dayNumber ? `Day ${dayNumber}` : 'Additional date'}</span>
+                          <strong>{formatItineraryDate(group.date)}</strong>
+                        </div>
+                        <div className="itinerary-activities">
+                          {group.items.map((item) => (
+                            <article className="itinerary-activity" key={item.id}>
+                              <div className="itinerary-activity-marker" aria-hidden="true"></div>
+                              <div className="itinerary-activity-content">
+                                {formatItineraryTime(item.start_time) && (
+                                  <span className="itinerary-time">
+                                    {formatItineraryTime(item.start_time)}
+                                    {formatItineraryTime(item.end_time) && ` – ${formatItineraryTime(item.end_time)}`}
+                                  </span>
+                                )}
+                                <h4>{item.title}</h4>
+                                {item.location && <p className="itinerary-location">📍 {item.location}</p>}
+                                {item.description && <p className="itinerary-description">{item.description}</p>}
+                                <div className="itinerary-actions">
+                                  <button type="button" onClick={() => openEditItineraryForm(item)} disabled={deletingItineraryId !== ''}>Edit</button>
+                                  <button type="button" onClick={() => handleDeleteItineraryItem(item.id)} disabled={deletingItineraryId !== ''}>
+                                    {deletingItineraryId === item.id ? 'Deleting…' : 'Delete'}
+                                  </button>
+                                </div>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </div>
 

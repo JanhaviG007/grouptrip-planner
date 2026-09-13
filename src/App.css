@@ -172,6 +172,40 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .over-budget .budget-progress span { background: #c46a57; }
 .over-budget strong, .over-budget-label { color: #b35242; }
 .over-budget-label { flex-shrink: 0; font-size: 11px; font-weight: 700; }
+.itinerary-section { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
+.itinerary-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.itinerary-heading h3 { margin: 0 0 5px; }
+.itinerary-heading p { margin: 0; color: var(--muted); font-size: 12px; }
+.itinerary-heading .secondary-button { flex-shrink: 0; padding: 10px 14px; font-size: 12px; }
+.itinerary-message { margin-bottom: 18px; }
+.itinerary-form { display: grid; gap: 14px; padding: 16px; margin-bottom: 20px; background: var(--cream); border: 1px solid var(--line); border-radius: 7px; }
+.itinerary-form label { display: grid; gap: 7px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.itinerary-form input, .itinerary-form textarea { width: 100%; padding: 11px 12px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; outline: none; font: inherit; resize: vertical; }
+.itinerary-form input:focus, .itinerary-form textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(63, 128, 103, .12); }
+.itinerary-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.itinerary-form-grid label:first-child, .itinerary-form-grid label:nth-child(5) { grid-column: 1 / -1; }
+.itinerary-empty-state { padding: 24px 16px; text-align: center; background: var(--cream); border: 1px dashed #cfdad1; border-radius: 7px; }
+.itinerary-empty-state strong { display: block; margin-bottom: 6px; font-size: 14px; }
+.itinerary-empty-state p { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+.itinerary-empty-state .secondary-button { padding: 10px 14px; font-size: 12px; }
+.itinerary-days { display: grid; gap: 24px; }
+.itinerary-day-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 15px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+.itinerary-day-heading span { color: var(--green); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.itinerary-day-heading strong { color: var(--ink); font-size: 13px; text-align: right; }
+.itinerary-activities { position: relative; display: grid; gap: 10px; padding: 15px 0 0 17px; }
+.itinerary-activities::before { position: absolute; top: 15px; bottom: 15px; left: 4px; width: 1px; background: #cdded2; content: ''; }
+.itinerary-activity { position: relative; }
+.itinerary-activity-marker { position: absolute; top: 16px; left: -17px; width: 9px; height: 9px; background: var(--green); border: 2px solid #e2efe5; border-radius: 50%; box-shadow: 0 0 0 1px var(--green); }
+.itinerary-activity-content { padding: 14px; background: #fbfcfa; border: 1px solid var(--line); border-radius: 7px; }
+.itinerary-time { display: block; margin-bottom: 5px; color: var(--green-dark); font-size: 11px; font-weight: 700; }
+.itinerary-activity h4 { margin: 0 0 6px; font-size: 14px; overflow-wrap: anywhere; }
+.itinerary-location, .itinerary-description { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.itinerary-description { margin-top: 5px; }
+.itinerary-actions { display: flex; gap: 12px; margin-top: 12px; }
+.itinerary-actions button { padding: 0; color: var(--green); background: transparent; border: 0; font-size: 11px; font-weight: 700; }
+.itinerary-actions button:last-child { color: #9b3d3d; }
+.itinerary-actions button:hover { text-decoration: underline; }
+.itinerary-actions button:disabled { cursor: not-allowed; opacity: .55; text-decoration: none; }
 .spending-insights { padding: 22px; margin-bottom: 28px; background: linear-gradient(135deg, #f5f8f4, #fbfcfa); border: 1px solid var(--line); border-radius: 8px; }
 .spending-insights-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .spending-insights-heading h3 { margin: 0 0 5px; }
@@ -285,6 +319,12 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .trip-health-usage span:last-child { text-align: left; }
   .spending-insights { padding: 18px; }
   .spending-insights-heading { flex-direction: column; gap: 10px; }
+  .itinerary-heading { align-items: flex-start; flex-direction: column; }
+  .itinerary-heading .secondary-button { width: 100%; }
+  .itinerary-form-grid { grid-template-columns: 1fr; }
+  .itinerary-form-grid label:first-child, .itinerary-form-grid label:nth-child(5) { grid-column: auto; }
+  .itinerary-day-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .itinerary-day-heading strong { text-align: left; }
   .expenses-heading { align-items: flex-start; flex-direction: column; }
   .expense-row { align-items: flex-start; flex-direction: column; gap: 6px; }
   .settlement-row { align-items: flex-start; flex-direction: column; gap: 7px; }
