@@ -45,6 +45,19 @@ function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [authMessage, setAuthMessage] = useState({ type: '', text: '' })
+  const [trips, setTrips] = useState([])
+  const [isTripsLoading, setIsTripsLoading] = useState(false)
+  const [tripsError, setTripsError] = useState('')
+  const [tripSuccessMessage, setTripSuccessMessage] = useState('')
+  const [isTripFormOpen, setIsTripFormOpen] = useState(false)
+  const [isTripSaving, setIsTripSaving] = useState(false)
+  const [tripFormMessage, setTripFormMessage] = useState('')
+  const [tripFormValues, setTripFormValues] = useState({
+    name: '',
+    destination: '',
+    startDate: '',
+    endDate: '',
+  })
   const [formValues, setFormValues] = useState({
     fullName: '',
     email: '',
@@ -72,6 +85,33 @@ function App() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session) {
+      return
+    }
+
+    const loadTrips = async () => {
+      setIsTripsLoading(true)
+      setTripsError('')
+
+      const { data, error } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('created_by', session.user.id)
+        .order('start_date', { ascending: true })
+
+      if (error) {
+        setTripsError('We could not load your trips. Please try again.')
+      } else {
+        setTrips(data || [])
+      }
+
+      setIsTripsLoading(false)
+    }
+
+    loadTrips()
+  }, [session])
 
   const openAuth = (mode = 'login') => {
     setAuthMode(mode)
@@ -158,6 +198,80 @@ function App() {
     }
   }
 
+  const openTripForm = () => {
+    if (!session) {
+      openAuth()
+      return
+    }
+
+    setTripFormMessage('')
+    setTripSuccessMessage('')
+    setIsTripFormOpen(true)
+  }
+
+  const closeTripForm = () => {
+    if (!isTripSaving) {
+      setIsTripFormOpen(false)
+      setTripFormMessage('')
+    }
+  }
+
+  const handleTripInputChange = (event) => {
+    const { name, value } = event.target
+    setTripFormValues((currentValues) => ({ ...currentValues, [name]: value }))
+    setTripFormMessage('')
+  }
+
+  const clearTripForm = () => {
+    setTripFormValues({
+      name: '',
+      destination: '',
+      startDate: '',
+      endDate: '',
+    })
+  }
+
+  const handleTripSubmit = async (event) => {
+    event.preventDefault()
+    setTripFormMessage('')
+
+    if (tripFormValues.startDate > tripFormValues.endDate) {
+      setTripFormMessage('The start date must be on or before the end date.')
+      return
+    }
+
+    setIsTripSaving(true)
+
+    const { error } = await supabase.from('trips').insert({
+      name: tripFormValues.name,
+      destination: tripFormValues.destination,
+      start_date: tripFormValues.startDate,
+      end_date: tripFormValues.endDate,
+      created_by: session.user.id,
+    })
+
+    if (error) {
+      setTripFormMessage('We could not save your trip. Please check your details and try again.')
+      setIsTripSaving(false)
+      return
+    }
+
+    clearTripForm()
+    setIsTripFormOpen(false)
+    setTripSuccessMessage('Your trip was created successfully.')
+    setIsTripSaving(false)
+
+    const { data, error: loadError } = await supabase
+      .from('trips')
+      .select('*')
+      .eq('created_by', session.user.id)
+      .order('start_date', { ascending: true })
+
+    if (!loadError) {
+      setTrips(data || [])
+    }
+  }
+
   const userName = session?.user?.user_metadata?.full_name
   const userLabel = userName || session?.user?.email
 
@@ -172,7 +286,7 @@ function App() {
 
           <div className="nav-links">
             <a className="nav-link active" href="/">Home</a>
-            <a className="nav-link" href="#trips">My Trips</a>
+            <a className="nav-link" href="#my-trips">My Trips</a>
             {session ? (
               <>
                 <span className="user-label" title={session.user.email}>{userLabel}</span>
@@ -195,7 +309,7 @@ function App() {
               and stay within everyone&apos;s individual budget.
             </p>
             <div className="hero-actions">
-              <button className="primary-button" type="button">Create a Trip <span aria-hidden="true">→</span></button>
+              <button className="primary-button" type="button" onClick={openTripForm}>Create a Trip <span aria-hidden="true">→</span></button>
               <button className="secondary-button" type="button">Explore Trips</button>
             </div>
           </div>
@@ -216,6 +330,37 @@ function App() {
             <span className="sparkle sparkle-two">✦</span>
           </div>
         </section>
+
+        {session && (
+          <section className="trips-section" id="my-trips">
+            <div className="container">
+              <div className="trips-heading">
+                <div>
+                  <p className="eyebrow">Your travel plans</p>
+                  <h2>My <span>trips.</span></h2>
+                </div>
+                <button className="secondary-button" type="button" onClick={openTripForm}>Create another trip</button>
+              </div>
+              {tripSuccessMessage && <p className="trip-success" role="status">{tripSuccessMessage}</p>}
+              {isTripsLoading && <p className="trips-status">Loading your trips…</p>}
+              {!isTripsLoading && tripsError && <p className="trips-status trips-error">{tripsError}</p>}
+              {!isTripsLoading && !tripsError && trips.length === 0 && (
+                <p className="trips-status">You have no trips yet. Create one to start planning.</p>
+              )}
+              {!isTripsLoading && !tripsError && trips.length > 0 && (
+                <div className="trips-grid">
+                  {trips.map((trip) => (
+                    <article className="trip-card" key={trip.id}>
+                      <h3>{trip.name}</h3>
+                      <p className="trip-destination">{trip.destination}</p>
+                      <p className="trip-dates">{trip.start_date} <span aria-hidden="true">→</span> {trip.end_date}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="features-section" id="trips">
           <div className="container">
@@ -245,6 +390,47 @@ function App() {
           <p>Plan trips together, without the budget stress.</p>
         </div>
       </footer>
+
+      {isTripFormOpen && (
+        <div className="auth-backdrop" role="presentation" onMouseDown={closeTripForm}>
+          <section
+            className="auth-modal trip-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trip-form-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="close-button" type="button" aria-label="Close create trip form" onClick={closeTripForm}>×</button>
+            <p className="eyebrow">Start planning</p>
+            <h2 id="trip-form-title">Create a trip.</h2>
+            <p className="form-introduction">Add the basic details and invite your group later.</p>
+            <form onSubmit={handleTripSubmit}>
+              <label>
+                Trip name
+                <input name="name" type="text" value={tripFormValues.name} onChange={handleTripInputChange} required />
+              </label>
+              <label>
+                Destination
+                <input name="destination" type="text" value={tripFormValues.destination} onChange={handleTripInputChange} required />
+              </label>
+              <div className="date-fields">
+                <label>
+                  Start date
+                  <input name="startDate" type="date" value={tripFormValues.startDate} onChange={handleTripInputChange} required />
+                </label>
+                <label>
+                  End date
+                  <input name="endDate" type="date" value={tripFormValues.endDate} onChange={handleTripInputChange} required />
+                </label>
+              </div>
+              {tripFormMessage && <p className="auth-message error" role="alert">{tripFormMessage}</p>}
+              <button className="auth-submit" type="submit" disabled={isTripSaving}>
+                {isTripSaving ? 'Saving trip…' : 'Create trip'}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
 
       {isAuthOpen && (
         <div className="auth-backdrop" role="presentation" onMouseDown={closeAuth}>
