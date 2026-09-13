@@ -53,6 +53,17 @@ function App() {
   const [tripMembers, setTripMembers] = useState([])
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
+  const [expenses, setExpenses] = useState([])
+  const [isExpensesLoading, setIsExpensesLoading] = useState(false)
+  const [expensesError, setExpensesError] = useState('')
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false)
+  const [isExpenseSaving, setIsExpenseSaving] = useState(false)
+  const [expenseFormMessage, setExpenseFormMessage] = useState({ type: '', text: '' })
+  const [expenseFormValues, setExpenseFormValues] = useState({
+    description: '',
+    amount: '',
+    paidBy: '',
+  })
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isMemberSaving, setIsMemberSaving] = useState(false)
   const [memberFormMessage, setMemberFormMessage] = useState({ type: '', text: '' })
@@ -150,6 +161,32 @@ function App() {
     loadTripMembers()
   }, [selectedTrip])
 
+  useEffect(() => {
+    if (!selectedTrip) {
+      return
+    }
+
+    const loadExpenses = async () => {
+      setIsExpensesLoading(true)
+      setExpensesError('')
+
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('trip_id', selectedTrip.id)
+
+      if (error) {
+        setExpensesError('We could not load the expenses for this trip. Please try again.')
+      } else {
+        setExpenses(data || [])
+      }
+
+      setIsExpensesLoading(false)
+    }
+
+    loadExpenses()
+  }, [selectedTrip])
+
   const openAuth = (mode = 'login') => {
     setAuthMode(mode)
     setAuthMessage({ type: '', text: '' })
@@ -245,8 +282,12 @@ function App() {
     setSelectedTrip(null)
     setTripMembers([])
     setMembersError('')
+    setExpenses([])
+    setExpensesError('')
     setIsAddMemberOpen(false)
     setMemberFormMessage({ type: '', text: '' })
+    setIsAddExpenseOpen(false)
+    setExpenseFormMessage({ type: '', text: '' })
   }
 
   const openAddMemberForm = () => {
@@ -333,6 +374,83 @@ function App() {
     setIsAddMemberOpen(false)
     setMemberFormMessage({ type: 'success', text: 'Member added successfully.' })
     setIsMemberSaving(false)
+  }
+
+  const openAddExpenseForm = () => {
+    setExpenseFormMessage({ type: '', text: '' })
+    setIsAddExpenseOpen(true)
+  }
+
+  const closeAddExpenseForm = () => {
+    if (!isExpenseSaving) {
+      setIsAddExpenseOpen(false)
+      setExpenseFormMessage({ type: '', text: '' })
+    }
+  }
+
+  const handleExpenseInputChange = (event) => {
+    const { name, value } = event.target
+    setExpenseFormValues((currentValues) => ({ ...currentValues, [name]: value }))
+    setExpenseFormMessage({ type: '', text: '' })
+  }
+
+  const clearExpenseForm = () => {
+    setExpenseFormValues({
+      description: '',
+      amount: '',
+      paidBy: '',
+    })
+  }
+
+  const handleAddExpenseSubmit = async (event) => {
+    event.preventDefault()
+    setExpenseFormMessage({ type: '', text: '' })
+
+    if (!expenseFormValues.description || !expenseFormValues.amount) {
+      setExpenseFormMessage({ type: 'error', text: 'Please enter a description and amount.' })
+      return
+    }
+
+    if (Number(expenseFormValues.amount) <= 0) {
+      setExpenseFormMessage({ type: 'error', text: 'The amount must be greater than 0.' })
+      return
+    }
+
+    if (!expenseFormValues.paidBy) {
+      setExpenseFormMessage({ type: 'error', text: 'Please select the member who paid.' })
+      return
+    }
+
+    setIsExpenseSaving(true)
+
+    const { error } = await supabase.from('expenses').insert({
+      trip_id: selectedTrip.id,
+      paid_by: expenseFormValues.paidBy,
+      description: expenseFormValues.description.trim(),
+      amount: Number(expenseFormValues.amount),
+    })
+
+    if (error) {
+      setExpenseFormMessage({ type: 'error', text: 'We could not save this expense. Please try again.' })
+      setIsExpenseSaving(false)
+      return
+    }
+
+    const { data, error: refreshError } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('trip_id', selectedTrip.id)
+
+    if (refreshError) {
+      setExpensesError('The expense was added, but we could not refresh the expense list.')
+    } else {
+      setExpenses(data || [])
+    }
+
+    clearExpenseForm()
+    setIsAddExpenseOpen(false)
+    setExpenseFormMessage({ type: 'success', text: 'Expense added successfully.' })
+    setIsExpenseSaving(false)
   }
 
   const openTripForm = () => {
@@ -599,6 +717,63 @@ function App() {
                     <span className="member-budget">
                       {member.budget === null || member.budget === undefined ? 'Budget not set' : `Budget: ${member.budget}`}
                     </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="expenses-heading">
+              <h3>Expenses</h3>
+              <button className="secondary-button" type="button" onClick={openAddExpenseForm}>Add Expense</button>
+            </div>
+            {isAddExpenseOpen && (
+              <form className="expense-form" onSubmit={handleAddExpenseSubmit}>
+                <label>
+                  Expense description
+                  <input name="description" type="text" value={expenseFormValues.description} onChange={handleExpenseInputChange} required />
+                </label>
+                <label>
+                  Amount
+                  <input name="amount" type="number" min="0.01" step="0.01" value={expenseFormValues.amount} onChange={handleExpenseInputChange} required />
+                </label>
+                <label>
+                  Paid by
+                  <select name="paidBy" value={expenseFormValues.paidBy} onChange={handleExpenseInputChange} required disabled={tripMembers.length === 0}>
+                    <option value="">Select a member</option>
+                    {tripMembers.map((member) => (
+                      <option key={member.user_id} value={member.user_id}>{member.user_id}</option>
+                    ))}
+                  </select>
+                </label>
+                {tripMembers.length === 0 && <p className="form-hint">Add a trip member before recording an expense.</p>}
+                {expenseFormMessage.text && (
+                  <p className={`auth-message ${expenseFormMessage.type}`} role="alert">{expenseFormMessage.text}</p>
+                )}
+                <div className="member-form-actions">
+                  <button className="auth-submit" type="submit" disabled={isExpenseSaving || tripMembers.length === 0}>
+                    {isExpenseSaving ? 'Adding expense…' : 'Add expense'}
+                  </button>
+                  <button className="cancel-button" type="button" onClick={closeAddExpenseForm} disabled={isExpenseSaving}>Cancel</button>
+                </div>
+              </form>
+            )}
+            {!isAddExpenseOpen && expenseFormMessage.type === 'success' && (
+              <p className="auth-message success member-success" role="status">{expenseFormMessage.text}</p>
+            )}
+            {isExpensesLoading && <p className="trips-status">Loading expenses…</p>}
+            {!isExpensesLoading && expensesError && <p className="trips-status trips-error">{expensesError}</p>}
+            {!isExpensesLoading && !expensesError && expenses.length === 0 && (
+              <p className="trips-status">No expenses added yet.</p>
+            )}
+            {!isExpensesLoading && !expensesError && expenses.length > 0 && (
+              <div className="expenses-list">
+                {expenses.map((expense) => (
+                  <div className="expense-row" key={expense.id || `${expense.description}-${expense.paid_by}`}>
+                    <div>
+                      <strong>{expense.description}</strong>
+                      <span>Paid by: {expense.paid_by}</span>
+                    </div>
+                    <span className="expense-amount">{expense.amount}</span>
                   </div>
                 ))}
               </div>
