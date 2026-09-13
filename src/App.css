@@ -129,6 +129,20 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .over-budget .budget-progress span { background: #c46a57; }
 .over-budget strong, .over-budget-label { color: #b35242; }
 .over-budget-label { flex-shrink: 0; font-size: 11px; font-weight: 700; }
+.spending-insights { padding: 22px; margin-bottom: 28px; background: linear-gradient(135deg, #f5f8f4, #fbfcfa); border: 1px solid var(--line); border-radius: 8px; }
+.spending-insights-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.spending-insights-heading h3 { margin: 0 0 5px; }
+.spending-insights-heading p { margin: 0; color: var(--muted); font-size: 12px; }
+.spending-insights-heading > strong { color: var(--green-dark); font-size: 17px; white-space: nowrap; }
+.biggest-category { padding: 15px; margin-bottom: 20px; background: #fff; border: 1px solid #dce8df; border-radius: 7px; }
+.biggest-category span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.biggest-category strong { display: block; margin-bottom: 5px; color: var(--green-dark); font-size: 18px; }
+.biggest-category p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.category-insights-list { display: grid; gap: 13px; }
+.category-insight-heading { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 6px; color: var(--ink); font-size: 12px; }
+.category-insight-heading span:last-child { color: var(--muted); white-space: nowrap; }
+.category-progress { height: 8px; overflow: hidden; background: #e1ebe4; border-radius: 99px; }
+.category-progress span { display: block; height: 100%; background: var(--green); border-radius: inherit; transition: width .25s ease; }
 .settlement-section { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
 .settlement-heading { margin-bottom: 18px; }
 .settlement-heading h3 { margin: 0; }
@@ -219,6 +233,8 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .member-row-actions, .budget-edit-form { width: 100%; }
   .budget-total-row { grid-template-columns: repeat(2, 1fr); }
   .budget-values { display: grid; gap: 5px; }
+  .spending-insights { padding: 18px; }
+  .spending-insights-heading { flex-direction: column; gap: 10px; }
   .expenses-heading { align-items: flex-start; flex-direction: column; }
   .expense-row { align-items: flex-start; flex-direction: column; gap: 6px; }
   .settlement-row { align-items: flex-start; flex-direction: column; gap: 7px; }

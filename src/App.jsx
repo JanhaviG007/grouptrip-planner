@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -877,6 +877,44 @@ function App() {
   const totalTripSpending = expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0)
   const totalTripAllocated = expenseSplits.reduce((total, split) => total + Number(split.amount_owed || 0), 0)
   const totalTripRemaining = totalTripBudget - totalTripAllocated
+  const spendingInsights = useMemo(() => {
+    const categoryTotalsByName = expenseCategories.reduce((totals, category) => ({
+      ...totals,
+      [category]: 0,
+    }), {})
+
+    const totalSpending = expenses.reduce((total, expense) => {
+      const amount = Number(expense.amount)
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return total
+      }
+
+      const category = expenseCategories.includes(expense.category)
+        ? expense.category
+        : 'Other'
+      categoryTotalsByName[category] += amount
+      return total + amount
+    }, 0)
+
+    const categoryTotals = expenseCategories.map((category) => ({
+      category,
+      total: categoryTotalsByName[category],
+      percentage: totalSpending > 0
+        ? (categoryTotalsByName[category] / totalSpending) * 100
+        : 0,
+    }))
+    const largestCategory = totalSpending > 0
+      ? categoryTotals.reduce((largest, current) => (
+        current.total > largest.total ? current : largest
+      ))
+      : null
+
+    return {
+      categoryTotals,
+      totalSpending,
+      largestCategory,
+    }
+  }, [expenses])
   const settlementResult = calculateSettlements(budgetSummaries)
 
   return (
@@ -1077,6 +1115,53 @@ function App() {
                         </div>
                       )
                     })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="spending-insights">
+              <div className="spending-insights-heading">
+                <div>
+                  <h3>Spending Insights</h3>
+                  <p>See how your trip spending is distributed.</p>
+                </div>
+                <strong>{formatCurrency(spendingInsights.totalSpending)}</strong>
+              </div>
+              {spendingInsights.totalSpending === 0 ? (
+                <p className="trips-status">Add expenses to see spending insights.</p>
+              ) : (
+                <>
+                  <div className="biggest-category">
+                    <span>Biggest category</span>
+                    <strong>{spendingInsights.largestCategory.category}</strong>
+                    <p>
+                      {spendingInsights.largestCategory.category} is your biggest expense category at{' '}
+                      {formatCurrency(spendingInsights.largestCategory.total)} (
+                      {Math.round(spendingInsights.largestCategory.percentage)}% of total spending).
+                    </p>
+                  </div>
+                  <div className="category-insights-list">
+                    {spendingInsights.categoryTotals.map((categoryTotal) => (
+                      <div className="category-insight-row" key={categoryTotal.category}>
+                        <div className="category-insight-heading">
+                          <span>{categoryTotal.category}</span>
+                          <span>
+                            {formatCurrency(categoryTotal.total)} · {Math.round(categoryTotal.percentage)}%
+                          </span>
+                        </div>
+                        <div
+                          className="category-progress"
+                          role="progressbar"
+                          aria-label={`${categoryTotal.category}: ${Math.round(categoryTotal.percentage)}% of spending`}
+                          aria-valuemin="0"
+                          aria-valuemax="100"
+                          aria-valuenow={Math.round(categoryTotal.percentage)}
+                        >
+                          <span style={{ width: `${Math.min(Math.max(categoryTotal.percentage, 0), 100)}%` }}></span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
