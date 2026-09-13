@@ -113,7 +113,7 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .budget-summary { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
 .budget-summary-heading { margin-bottom: 18px; }
 .budget-summary-heading h3 { margin: 0; }
-.budget-total-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.budget-total-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
 .budget-total-row > div { display: grid; gap: 5px; padding: 12px; background: var(--cream); border-radius: 6px; }
 .budget-total-row span { color: var(--muted); font-size: 11px; }
 .budget-total-row strong { font-size: 14px; }
@@ -122,6 +122,8 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .budget-row-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .budget-row-heading strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .budget-values { display: flex; flex-wrap: wrap; gap: 8px 15px; color: var(--muted); font-size: 11px; }
+.balance-positive { color: var(--green-dark); font-weight: 700; }
+.balance-negative { color: #b35242; font-weight: 700; }
 .budget-progress { height: 7px; margin-top: 13px; overflow: hidden; background: #e5ede7; border-radius: 99px; }
 .budget-progress span { display: block; height: 100%; background: var(--green); border-radius: inherit; transition: width .25s ease; }
 .over-budget .budget-progress span { background: #c46a57; }
@@ -192,7 +194,7 @@ h3 { margin-bottom: 10px; font-size: 18px; }
   .date-fields { grid-template-columns: 1fr; gap: 16px; }
   .members-heading { align-items: flex-start; flex-direction: column; }
   .member-row { align-items: flex-start; flex-direction: column; gap: 6px; }
-  .budget-total-row { grid-template-columns: 1fr; }
+  .budget-total-row { grid-template-columns: repeat(2, 1fr); }
   .budget-values { display: grid; gap: 5px; }
   .expenses-heading { align-items: flex-start; flex-direction: column; }
   .expense-row { align-items: flex-start; flex-direction: column; gap: 6px; }

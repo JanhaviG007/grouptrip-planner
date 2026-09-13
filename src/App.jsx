@@ -63,6 +63,7 @@ function App() {
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
   const [expenses, setExpenses] = useState([])
+  const [expenseSplits, setExpenseSplits] = useState([])
   const [isExpensesLoading, setIsExpensesLoading] = useState(false)
   const [expensesError, setExpensesError] = useState('')
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false)
@@ -189,6 +190,23 @@ function App() {
         setExpensesError('We could not load the expenses for this trip. Please try again.')
       } else {
         setExpenses(data || [])
+
+        if (!data || data.length === 0) {
+          setExpenseSplits([])
+        } else {
+          const expenseIds = data.map((expense) => expense.id)
+          const { data: splitData, error: splitError } = await supabase
+            .from('expense_splits')
+            .select('*')
+            .in('expense_id', expenseIds)
+
+          if (splitError) {
+            setExpensesError('Expenses loaded, but we could not load their splits.')
+            setExpenseSplits([])
+          } else {
+            setExpenseSplits(splitData || [])
+          }
+        }
       }
 
       setIsExpensesLoading(false)
@@ -293,6 +311,7 @@ function App() {
     setTripMembers([])
     setMembersError('')
     setExpenses([])
+    setExpenseSplits([])
     setExpensesError('')
     setIsAddMemberOpen(false)
     setMemberFormMessage({ type: '', text: '' })
@@ -494,6 +513,22 @@ function App() {
       setExpensesError('The expense was added, but we could not refresh the expense list.')
     } else {
       setExpenses(data || [])
+      const expenseIds = (data || []).map((expense) => expense.id)
+
+      if (expenseIds.length === 0) {
+        setExpenseSplits([])
+      } else {
+        const { data: splitData, error: splitError } = await supabase
+          .from('expense_splits')
+          .select('*')
+          .in('expense_id', expenseIds)
+
+        if (splitError) {
+          setExpensesError('The expense was added, but we could not refresh its splits.')
+        } else {
+          setExpenseSplits(splitData || [])
+        }
+      }
     }
 
     clearExpenseForm()
@@ -580,22 +615,28 @@ function App() {
   const userLabel = userName || session?.user?.email
   const budgetSummaries = tripMembers.map((member) => {
     const budget = Number(member.budget || 0)
-    const spent = expenses
+    const paid = expenses
       .filter((expense) => expense.paid_by === member.user_id)
       .reduce((total, expense) => total + Number(expense.amount || 0), 0)
+    const owed = expenseSplits
+      .filter((split) => split.user_id === member.user_id)
+      .reduce((total, split) => total + Number(split.amount_owed || 0), 0)
 
     return {
       userId: member.user_id,
       label: `Member ${tripMembers.indexOf(member) + 1}`,
       budget,
-      spent,
-      remaining: budget - spent,
-      percentage: budget > 0 ? (spent / budget) * 100 : 0,
+      paid,
+      owed,
+      netBalance: paid - owed,
+      remaining: budget - owed,
+      percentage: budget > 0 ? (owed / budget) * 100 : 0,
     }
   })
   const totalTripBudget = budgetSummaries.reduce((total, member) => total + member.budget, 0)
   const totalTripSpending = expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0)
-  const totalTripRemaining = totalTripBudget - totalTripSpending
+  const totalTripAllocated = expenseSplits.reduce((total, split) => total + Number(split.amount_owed || 0), 0)
+  const totalTripRemaining = totalTripBudget - totalTripAllocated
 
   return (
     <div className="app">
@@ -760,6 +801,10 @@ function App() {
                       <span>Total Trip Spending</span>
                       <strong>{formatCurrency(totalTripSpending)}</strong>
                     </div>
+                    <div>
+                      <span>Total Allocated/Owed</span>
+                      <strong>{formatCurrency(totalTripAllocated)}</strong>
+                    </div>
                     <div className={totalTripRemaining < 0 ? 'over-budget' : ''}>
                       <span>Total Remaining</span>
                       <strong>{formatCurrency(totalTripRemaining)}</strong>
@@ -778,7 +823,11 @@ function App() {
                           </div>
                           <div className="budget-values">
                             <span>Budget: {formatCurrency(member.budget)}</span>
-                            <span>Spent: {formatCurrency(member.spent)}</span>
+                            <span>Paid: {formatCurrency(member.paid)}</span>
+                            <span>Owed: {formatCurrency(member.owed)}</span>
+                            <span className={member.netBalance > 0 ? 'balance-positive' : member.netBalance < 0 ? 'balance-negative' : ''}>
+                              Net: {member.netBalance > 0 ? '+' : ''}{formatCurrency(member.netBalance)}
+                            </span>
                             <span>Remaining: {formatCurrency(member.remaining)}</span>
                           </div>
                           <div className="budget-progress" aria-label={`${Math.round(member.percentage)}% of budget spent`}>
