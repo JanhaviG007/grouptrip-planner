@@ -29,6 +29,68 @@ const expenseCategories = [
   'Other',
 ]
 
+function getTripStatus(trip) {
+  const startDate = trip?.start_date
+  const endDate = trip?.end_date
+  const validDates = /^\d{4}-\d{2}-\d{2}$/.test(startDate) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(endDate) &&
+    startDate <= endDate
+
+  if (!validDates) {
+    return { key: 'unknown', label: 'Dates unavailable' }
+  }
+
+  const today = new Date()
+  const todayDate = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  if (todayDate < startDate) {
+    return { key: 'upcoming', label: 'Upcoming' }
+  }
+  if (todayDate > endDate) {
+    return { key: 'completed', label: 'Completed' }
+  }
+  return { key: 'in-progress', label: 'In progress' }
+}
+
+function getTripDuration(startDate, endDate) {
+  const validDates = /^\d{4}-\d{2}-\d{2}$/.test(startDate) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+
+  if (!validDates) {
+    return null
+  }
+
+  const start = Date.UTC(
+    Number(startDate.slice(0, 4)),
+    Number(startDate.slice(5, 7)) - 1,
+    Number(startDate.slice(8, 10)),
+  )
+  const end = Date.UTC(
+    Number(endDate.slice(0, 4)),
+    Number(endDate.slice(5, 7)) - 1,
+    Number(endDate.slice(8, 10)),
+  )
+  const duration = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1
+
+  return duration > 0 ? duration : null
+}
+
+function formatTripDate(dateValue) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return 'Date unavailable'
+  }
+
+  const date = new Date(`${dateValue}T00:00:00`)
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
 function getAuthErrorMessage(error) {
   const message = error?.message?.toLowerCase() || ''
 
@@ -898,6 +960,13 @@ function App() {
 
   const userName = session?.user?.user_metadata?.full_name
   const userLabel = userName || session?.user?.email
+  const dashboardName = userName || session?.user?.email || 'there'
+  const dashboardTripStatuses = trips.map((trip) => getTripStatus(trip))
+  const dashboardStats = {
+    total: trips.length,
+    upcoming: dashboardTripStatuses.filter((status) => status.key === 'upcoming').length,
+    completed: dashboardTripStatuses.filter((status) => status.key === 'completed').length,
+  }
   const budgetSummaries = tripMembers.map((member) => {
     const budget = Number(member.budget || 0)
     const paid = expenses
@@ -1026,10 +1095,38 @@ function App() {
         {session && (
           <section className="trips-section" id="my-trips">
             <div className="container">
+              <div className="dashboard-welcome">
+                <div>
+                  <p className="eyebrow">Your dashboard</p>
+                  <h2>Welcome back, {dashboardName} <span aria-hidden="true">👋</span></h2>
+                  <p>Plan your next group adventure.</p>
+                </div>
+                <button className="primary-button" type="button" onClick={openTripForm}>
+                  Create Trip <span aria-hidden="true">→</span>
+                </button>
+              </div>
+              <div className="dashboard-stats" aria-label="Trip statistics">
+                <div className="dashboard-stat-card">
+                  <span>Total Trips</span>
+                  <strong>{dashboardStats.total}</strong>
+                  <small>Your travel plans</small>
+                </div>
+                <div className="dashboard-stat-card">
+                  <span>Upcoming</span>
+                  <strong>{dashboardStats.upcoming}</strong>
+                  <small>Adventures ahead</small>
+                </div>
+                <div className="dashboard-stat-card">
+                  <span>Completed</span>
+                  <strong>{dashboardStats.completed}</strong>
+                  <small>Trips you have taken</small>
+                </div>
+              </div>
               <div className="trips-heading">
                 <div>
                   <p className="eyebrow">Your travel plans</p>
-                  <h2>My <span>trips.</span></h2>
+                  <h2>Your <span>trips.</span></h2>
+                  <p className="trips-subheading">Keep your plans, people, and budgets together.</p>
                 </div>
                 <button className="secondary-button" type="button" onClick={openTripForm}>Create another trip</button>
               </div>
@@ -1037,11 +1134,20 @@ function App() {
               {isTripsLoading && <p className="trips-status">Loading your trips…</p>}
               {!isTripsLoading && tripsError && <p className="trips-status trips-error">{tripsError}</p>}
               {!isTripsLoading && !tripsError && trips.length === 0 && (
-                <p className="trips-status">You have no trips yet. Create one to start planning.</p>
+                <div className="trips-empty-state">
+                  <div className="empty-state-icon" aria-hidden="true">✦</div>
+                  <h3>No trips yet</h3>
+                  <p>Start planning your next adventure with your group.</p>
+                  <button className="primary-button" type="button" onClick={openTripForm}>Create your first trip</button>
+                </div>
               )}
               {!isTripsLoading && !tripsError && trips.length > 0 && (
                 <div className="trips-grid">
-                  {trips.map((trip) => (
+                  {trips.map((trip) => {
+                    const tripStatus = getTripStatus(trip)
+                    const tripDuration = getTripDuration(trip.start_date, trip.end_date)
+
+                    return (
                     <article
                       className="trip-card"
                       key={trip.id}
@@ -1055,11 +1161,18 @@ function App() {
                         }
                       }}
                     >
+                      <div className="trip-card-header">
+                        <span className={`trip-status-badge trip-status-${tripStatus.key}`}>{tripStatus.label}</span>
+                        <span className="trip-card-arrow" aria-hidden="true">↗</span>
+                      </div>
                       <h3>{trip.name}</h3>
                       <p className="trip-destination">{trip.destination}</p>
-                      <p className="trip-dates">{trip.start_date} <span aria-hidden="true">→</span> {trip.end_date}</p>
+                      <p className="trip-dates">{formatTripDate(trip.start_date)} <span aria-hidden="true">→</span> {formatTripDate(trip.end_date)}</p>
+                      {tripDuration && <p className="trip-duration">{tripDuration} {tripDuration === 1 ? 'day' : 'days'}</p>}
+                      <span className="trip-card-footer">View trip <span aria-hidden="true">→</span></span>
                     </article>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
