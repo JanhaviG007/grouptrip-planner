@@ -184,6 +184,7 @@ h3 { margin-bottom: 10px; font-size: 18px; }
 .expense-row strong, .expense-row span { display: block; }
 .expense-row strong { margin-bottom: 5px; font-size: 13px; }
 .expense-row div span { color: var(--muted); }
+.expense-category { width: fit-content; padding: 3px 7px; margin-bottom: 5px; color: var(--green) !important; background: #edf6f1; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .expense-amount { color: var(--ink); font-size: 14px; font-weight: 700; white-space: nowrap; }
 
 @media (max-width: 700px) {

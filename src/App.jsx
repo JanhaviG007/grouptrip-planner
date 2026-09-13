@@ -20,6 +20,15 @@ const features = [
   },
 ]
 
+const expenseCategories = [
+  'Accommodation',
+  'Transport',
+  'Food',
+  'Activities',
+  'Shopping',
+  'Other',
+]
+
 function getAuthErrorMessage(error) {
   const message = error?.message?.toLowerCase() || ''
 
@@ -136,6 +145,7 @@ function App() {
     amount: '',
     paidBy: '',
     sharedBy: [],
+    category: 'Other',
   })
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isMemberSaving, setIsMemberSaving] = useState(false)
@@ -652,6 +662,7 @@ function App() {
       amount: '',
       paidBy: '',
       sharedBy: [],
+      category: 'Other',
     })
   }
 
@@ -691,6 +702,11 @@ function App() {
       return
     }
 
+    if (!expenseCategories.includes(expenseFormValues.category)) {
+      setExpenseFormMessage({ type: 'error', text: 'Please select a valid expense category.' })
+      return
+    }
+
     setIsExpenseSaving(true)
 
     const { data: createdExpense, error } = await supabase
@@ -700,6 +716,7 @@ function App() {
         paid_by: expenseFormValues.paidBy,
         description: expenseFormValues.description.trim(),
         amount: Number(expenseFormValues.amount),
+        category: expenseFormValues.category,
       })
       .select()
       .single()
@@ -1208,6 +1225,14 @@ function App() {
                     ))}
                   </select>
                 </label>
+                <label>
+                  Category
+                  <select name="category" value={expenseFormValues.category} onChange={handleExpenseInputChange} required>
+                    {expenseCategories.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </label>
                 <fieldset className="shared-by-fieldset">
                   <legend>Shared by</legend>
                   <div className="shared-by-list">
@@ -1250,8 +1275,9 @@ function App() {
                   <div className="expense-row" key={expense.id || `${expense.description}-${expense.paid_by}`}>
                     <div>
                       <strong>{expense.description}</strong>
-                      <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers, profiles)}</span>
-                    </div>
+                    <span className="expense-category">{expense.category || 'Other'}</span>
+                    <span>Paid by: {getMemberLabel(expense.paid_by, tripMembers, profiles)}</span>
+                  </div>
                     <span className="expense-amount">{expense.amount}</span>
                   </div>
                 ))}
