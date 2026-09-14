@@ -835,7 +835,7 @@ function App() {
 
     const { data: user, error: lookupError } = await supabase.functions.invoke(
       'lookup-user',
-      { body: { email: memberFormValues.email.trim() } },
+      { body: { email: memberFormValues.email.trim(), trip_id: selectedTrip.id } },
     )
 
     const userId = user?.id || user?.user?.id
@@ -1079,36 +1079,24 @@ function App() {
 
     setIsExpenseSaving(true)
 
-    const { data: createdExpense, error } = await supabase
-      .from('expenses')
-      .insert({
-        trip_id: selectedTrip.id,
-        paid_by: expenseFormValues.paidBy,
-        description: expenseFormValues.description.trim(),
-        amount: Number(expenseFormValues.amount),
-        category: expenseFormValues.category,
-      })
-      .select()
-      .single()
+    const expenseAmount = Number(expenseFormValues.amount)
+    const splitRows = createEqualSplitRows(
+      'pending',
+      expenseAmount,
+      expenseFormValues.sharedBy,
+    ).map(({ user_id, amount_owed }) => ({ user_id, amount_owed }))
+
+    const { error } = await supabase.rpc('create_expense_with_splits', {
+      p_trip_id: selectedTrip.id,
+      p_paid_by: expenseFormValues.paidBy,
+      p_description: expenseFormValues.description.trim(),
+      p_amount: expenseAmount,
+      p_category: expenseFormValues.category,
+      p_splits: splitRows,
+    })
 
     if (error) {
       setExpenseFormMessage({ type: 'error', text: 'We could not save this expense. Please try again.' })
-      setIsExpenseSaving(false)
-      return
-    }
-
-    const splitRows = createEqualSplitRows(
-      createdExpense.id,
-      Number(expenseFormValues.amount),
-      expenseFormValues.sharedBy,
-    )
-    const { error: splitError } = await supabase.from('expense_splits').insert(splitRows)
-
-    if (splitError) {
-      setExpenseFormMessage({
-        type: 'error',
-        text: 'The expense was created, but the split could not be saved. Please check the expense before continuing.',
-      })
       setIsExpenseSaving(false)
       return
     }
@@ -1176,47 +1164,21 @@ function App() {
     }
 
     setIsExpenseSaving(true)
-    const { error: updateError } = await supabase
-      .from('expenses')
-      .update({
-        description: expenseFormValues.description.trim(),
-        amount,
-        category: expenseFormValues.category,
-        paid_by: expenseFormValues.paidBy,
-      })
-      .eq('id', editingExpenseId)
-      .eq('trip_id', selectedTrip.id)
-
-    if (updateError) {
-      setExpenseFormMessage({ type: 'error', text: 'We could not update this expense. Please try again.' })
-      setIsExpenseSaving(false)
-      return
-    }
-
-    const { error: deleteSplitsError } = await supabase
-      .from('expense_splits')
-      .delete()
-      .eq('expense_id', editingExpenseId)
-
-    if (deleteSplitsError) {
-      await refreshExpenses()
-      setExpenseFormMessage({
-        type: 'error',
-        text: 'The expense was updated, but its existing splits could not be replaced.',
-      })
-      setIsExpenseSaving(false)
-      return
-    }
-
     const splitRows = createEqualSplitRows(editingExpenseId, amount, expenseFormValues.sharedBy)
-    const { error: insertSplitsError } = await supabase.from('expense_splits').insert(splitRows)
+      .map(({ user_id, amount_owed }) => ({ user_id, amount_owed }))
 
-    if (insertSplitsError) {
-      await refreshExpenses()
-      setExpenseFormMessage({
-        type: 'error',
-        text: 'The expense was updated, but the new splits could not be saved.',
-      })
+    const { error } = await supabase.rpc('update_expense_with_splits', {
+      p_expense_id: editingExpenseId,
+      p_trip_id: selectedTrip.id,
+      p_paid_by: expenseFormValues.paidBy,
+      p_description: expenseFormValues.description.trim(),
+      p_amount: amount,
+      p_category: expenseFormValues.category,
+      p_splits: splitRows,
+    })
+
+    if (error) {
+      setExpenseFormMessage({ type: 'error', text: 'We could not update this expense. Please try again.' })
       setIsExpenseSaving(false)
       return
     }
@@ -1247,18 +1209,6 @@ function App() {
     setDeletingExpenseId(expenseId)
     setExpenseFormMessage({ type: '', text: '' })
 
-    const { error: deleteSplitsError } = await supabase
-      .from('expense_splits')
-      .delete()
-      .eq('expense_id', expenseId)
-
-    if (deleteSplitsError) {
-      await refreshExpenses()
-      setExpenseFormMessage({ type: 'error', text: 'We could not delete this expense’s splits, so the expense was kept.' })
-      setDeletingExpenseId('')
-      return
-    }
-
     const { error: deleteExpenseError } = await supabase
       .from('expenses')
       .delete()
@@ -1267,7 +1217,7 @@ function App() {
 
     if (deleteExpenseError) {
       await refreshExpenses()
-      setExpenseFormMessage({ type: 'error', text: 'The expense splits were removed, but the expense could not be deleted.' })
+      setExpenseFormMessage({ type: 'error', text: 'We could not delete this expense. Please try again.' })
       setDeletingExpenseId('')
       return
     }
